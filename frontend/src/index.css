@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply font-mono text-ledger-ink antialiased;
+}
+
+/* Respect reduced-motion preferences for the pulse/scan animations below. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+.animate-scan {
+  animation: scanline 1.4s ease-in-out infinite;
+}
+
+/* thin custom scrollbar for the message panes */
+.pane-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.pane-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pane-scroll::-webkit-scrollbar-thumb {
+  background-color: #263151;
+  border-radius: 4px;
+}

@@ -1,0 +1,1533 @@
+conversion_id: MT103_TO_PACS008
+source_format: MT103
+target_format: pacs.008.001.08
+version: "2.6"
+last_updated: "2026-08-31"
+scope_notes: >
+  SWIFT MT103 -> pacs.008.001.08 mapping profile.
+
+
+  TARGET PROFILE DECISION (2026-08-31): The user does not target TARGET2 specifically. This document therefore treats SWIFT
+  CBPR+ / FINplus cross-border payment translation practice as the primary target profile for MT103 -> pacs.008.001.08. The
+  supplied pacs.008.001.08 XSD remains the structural authority. Exact CBPR+ translation tables are maintained by Swift in
+  MyStandards / the Translation Portal; where a public Swift source does not expose a field-level rule, this document does
+  not label the rule "SWIFT-confirmed". It either uses a corroborated public implementation/reference or fails closed.
+
+
+  SOURCE HIERARCHY:
+
+  1. Supplied pacs.008.001.08 XSD for XML structure and datatype constraints.
+
+  2. Official Swift MT103 Message Reference Guide / public Swift payment guidance for MT field semantics.
+
+  3. Official Swift public CBPR+/PMPG material for pacs.008 usage, settlement, addresses and translation principles.
+
+  4. Public CBPR+ implementation evidence (Prowide translation release notes) only as corroboration where the exact Swift
+  Translation Portal rule is not publicly exposed; such evidence is explicitly labelled corroborative, not a substitute for
+  MyStandards certification.
+
+  5. No TARGET2-specific rule is treated as a universal SWIFT rule.
+
+
+  IMPORTANT: The public Swift website confirms that MT103 is translated to pacs.008 under CBPR+ and that the authoritative
+  translation rules are available through Swift MyStandards / Translation Portal. Exact portal-only field rules cannot be
+  independently certified from public pages without access. This file therefore fails closed on genuinely unresolved mappings
+  rather than inventing values.
+
+
+  ADDRESS POLICY: Do not infer Town/Country/PostalCode from free-form K-option text. For F-option structured addresses, preserve
+  qualified data where the engine can deterministically extract it. From 14 November 2026 Swift requires fully structured
+  or hybrid addresses for in-scope cross-border payment messages, with Town Name and Country Code in the structured part.
+  Any deployment intended to be live after that date must add the required address validation/structuring layer.
+
+
+  SETTLEMENT POLICY: SettlementMethod is not a value that can be safely inferred from the mere absence of 53/54/55. The current
+  rule keeps the conservative INDA default for ordinary serial payments and uses COVE only for explicit cover/reimbursement
+  patterns supported by the configured source fields. A production deployment must validate this against its actual CBPR+
+  Translation Portal rule/corridor configuration.
+
+
+  OPERATIONAL SCOPE (added v2.1): Swift's CBPR+ MT/MX coexistence period for cross-border payment instructions ended in
+  November 2025; new live cross-border FI-to-FI traffic on the Swift network is native ISO 20022 (pacs.008), not MT103. This
+  converter is therefore for MT103 input arriving from a source that still legitimately produces it after that date - e.g.
+  legacy/archival MT103 conversion, a domestic or non-Swift rail still issuing MT103, back-office reconciliation against
+  historical messages, or test/reference tooling - not for translating live Swift cross-border network traffic, which is
+  MX-native today. Confirm the actual source of incoming MT103 messages before deploying this mapping in production, since
+  that context affects how strict the fail-closed decisions below should be.
+
+field_mappings:
+- source_field: "20"
+  source_name: "Sender's Reference (reused for Message Identification)"
+  target_path: "GrpHdr.MsgId"
+  mandatory: true
+  transformation: direct_copy
+  max_length: 35
+  notes: >
+    v2.3 REVISION (real-message comparison, 2026-08-31): previously
+    generated as a fresh random UUID (v1.8) on the reasoning that MsgId
+    must be unique per message rather than copied from input. Switched to
+    reusing field 20 (Sender's Reference) directly, matching a common
+    real-world convention (also seen in a shared reference pacs.008
+    example, where MsgId/InstrId/EndToEndId all equal the same sender
+    reference) and this document's OWN existing precedent for field 20
+    (already cited, UHB-adjacent: 'a point-to-point reference... directly
+    comparable with the Sender's Reference'). TRADEOFF, stated plainly:
+    field 20 is chosen by the SENDER and is only guaranteed unique within
+    that sender's own traffic, not globally the way a UUID is - if this
+    deployment needs cross-institution global uniqueness for MsgId, a
+    generated UUID (this document's previous approach) may still be more
+    appropriate; revisit if that need is confirmed. mandatory:true with no
+    default_values fallback is intentional: if field 20 is genuinely
+    absent, this now fails closed rather than silently generating a
+    disconnected UUID - consistent with this document's broader v2.x
+    fail-closed direction. max_length:35 matches Max35Text; field 20
+    itself is capped at 16 chars by MT103 FIN Category 1 field length
+    rules (see the InstrId entry above), well within that limit.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "reject - GrpHdr/MsgId is mandatory with no other sourced value to fall back to"
+
+- source_field: "GENERATED:CreDtTm"
+  source_name: "Creation Date Time (synthetic - not sourced from any MT103 field)"
+  target_path: "GrpHdr.CreDtTm"
+  mandatory: true
+  transformation: generated
+  generator: timestamp
+  notes: >
+    v1.8 GAP FIX: GrpHdr/CreDtTm is mandatory per the pacs.008.001.08
+    XSD, same envelope-field status as MsgId above - set to the actual
+    conversion time, not any value from the source message.
+  edge_cases:
+  - condition: "N/A - always generated, never absent"
+    handling: "not applicable"
+
+- source_field: "GENERATED:NbOfTxs"
+  source_name: "Number Of Transactions (synthetic - not sourced from any MT103 field)"
+  target_path: "GrpHdr.NbOfTxs"
+  mandatory: true
+  transformation: constant
+  constant_value: "1"
+  notes: >
+    v1.8 GAP FIX: GrpHdr/NbOfTxs is mandatory per the pacs.008.001.08
+    XSD. Fixed at "1" because this engine converts exactly one MT103
+    into exactly one CdtTrfTxInf per message (no batching support) -
+    unlike MsgId/CreDtTm this value is genuinely the same for every
+    conversion, so 'constant' (not 'generated') is correct here.
+  edge_cases:
+  - condition: "N/A - always constant"
+    handling: "not applicable"
+
+- source_field: "20"
+  source_name: "Sender's Reference"
+  target_path: "CdtTrfTxInf.PmtId.InstrId"
+  mandatory: false
+  transformation: truncate
+  max_length: 16
+  notes: >-
+    Field 20 maps to PaymentIdentification/InstructionIdentification. The CBPR+ translation restricts this point-to-point
+    reference to 16 characters. Never silently truncate; the engine must reject values longer than 16 characters.
+  edge_cases:
+  - condition: "Value exceeds 16 characters"
+    handling: "reject - do not silently truncate beyond the CBPR+ limit"
+  - condition: "Field absent"
+    handling: "reject - InstrId is Min 1 - Max 1 per UHB p.209"
+
+- source_field: "121"
+  source_name: "UETR (Block 3)"
+  target_path: "CdtTrfTxInf.PmtId.UETR"
+  mandatory: false
+  transformation: direct_copy
+  allowed_pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+  notes: >-
+    UETR is UUID version 4 and is carried in MT Block 3 field 121. Reject an absent or malformed UETR in this strict profile;
+    do not fabricate a replacement in the mapping layer. Public Swift material identifies UETR as a required tracking identifier
+    for MT103/pacs.008 payment flows; exact current contingency handling belongs to the Swift Translation Portal.
+  edge_cases:
+  - condition: "Block 3 Field 121 absent"
+    handling: "reject - do not generate a substitute UUID"
+
+- source_field: "32A"
+  source_name: "Value Date (of 32A composite)"
+  target_path: "CdtTrfTxInf.IntrBkSttlmDt"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >
+    UHB p.212, verbatim: "the value date comparable with the MT Field
+    32A." Schema has no composite-field substring-extraction transform
+    type, so date_format applied directly to the raw 32A value (e.g.
+    "240115USD1234,56") throws - llm_assisted used as a workaround, not
+    because the rule is judgement-based (it's deterministic fixed-width
+    extraction). DECISION PROCEDURE (verbatim, given to the LLM step):
+    "Take MT field 32A. First 6 characters = value date, YYMMDD. Convert
+    to YYYY-MM-DD, YY = 20YY. Output only the converted date."
+  edge_cases:
+  - condition: "YY outside 01-60"
+    handling: >
+      reject. Confirmed empirically: sample TRNK
+      (inflow_translation_sample_messages_2025Q3) with date 2061-07-21
+      produced engine error "T50 Year not in range 01 - 60" - legacy
+      MT two-digit year is only valid 2001-2060.
+  - condition: "Field absent"
+    handling: "reject - mandatory pacs.008 element per UHB p.212"
+  - condition: "First 6 characters not all digits"
+    handling: "reject - malformed 32A"
+
+- source_field: "32A"
+  source_name: "Interbank Settled Amount - currency portion (of 32A composite)"
+  target_path: "CdtTrfTxInf.IntrBkSttlmAmt.@Ccy"
+  mandatory: false
+  transformation: direct_copy
+  extract_pattern: "^\\d{6}([A-Z]{3})"
+  allowed_pattern: "^[A-Z]{3}$"
+  notes: >
+    v1.11 STRUCTURAL FIX: split off from a single llm_assisted entry
+    that targeted IntrBkSttlmAmt directly - which validation rejected
+    with 'cvc-complex-type.4: Attribute Ccy must appear on element
+    IntrBkSttlmAmt', because MxRenderer had NO way to emit XML
+    attributes at all (ActiveCurrencyAndAmount's Ccy is a MANDATORY
+    attribute, not a child element - see the XSD) and a single
+    llm_assisted entry can only ever produce ONE value at ONE
+    target_path, structurally incapable of populating both the
+    attribute and the text content from one call. Fixed by adding a
+    generic '@AttrName' convention to MxRenderer (any target_path ending
+    in .@Foo sets attribute Foo on the parent element) and splitting
+    this into two entries. UHB p.212, verbatim: "the point-to-point
+    currency amount exchanged, comparable with the MT Field 32A."
+    Currency extraction (characters 7-9 of the composite) is
+    deterministic fixed-width extraction, not a judgement call, so uses
+    extract_pattern + direct_copy instead of an LLM - matches this
+    engine's own stated preference for exact operations over LLM calls
+    where a single correct answer exists. allowed_pattern enforces the
+    ISO 4217 shape this entry's edge_cases already described but the
+    prior llm_assisted version never actually enforced.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "reject - mandatory pacs.008 element per UHB p.212"
+  - condition: "Characters 7-9 not 3 uppercase letters"
+    handling: "reject - do not guess currency (enforced by allowed_pattern)"
+
+- source_field: "32A"
+  source_name: "Interbank Settled Amount - amount portion (of 32A composite)"
+  target_path: "CdtTrfTxInf.IntrBkSttlmAmt"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  extract_pattern: "^\\d{6}[A-Z]{3}(.+)$"
+  notes: >-
+    Deterministic fixed-width extraction of the first 6 characters of MT103 field 32A (YYMMDD) followed by ISO date conversion.
+    The mapping schema has no substring/date extraction transform, so llm_assisted remains an engine-schema workaround; the
+    decision procedure is deterministic and the LLM must never infer missing data. Reject malformed dates and years outside
+    the MT103 01-60 range.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "reject - mandatory pacs.008 element per UHB p.212"
+  - condition: "Remainder is not a valid comma-decimal number"
+    handling: "reject - enforced by decimal_comma_to_dot"
+
+- source_field: "GENERATED:SttlmMtd"
+  source_name: "Settlement Method (derived - not sourced from any single MT103 field)"
+  target_path: "GrpHdr.SttlmInf.SttlmMtd"
+  mandatory: true
+  transformation: conditional
+  conditional:
+    check_fields:
+    - 53A
+    - 53D
+    - 54A
+    - 54B
+    - 54D
+    - 55A
+    - 55B
+    - 55D
+    if_any_present: COVE
+    if_none_present: INDA
+  notes: >-
+    SettlementMethod is mandatory in pacs.008. Public Swift/PMPG guidance says the method must reflect the actual settlement
+    relationship; it must not be guessed merely from XML structure. For this generic CBPR+ profile the mapping uses COVE when
+    explicit reimbursement/cover indicators are present in the configured MT fields, otherwise INDA for the ordinary serial
+    case. This is a conservative implementation rule, not a universal statement that every 53/54/55 combination means COVE;
+    validate against the Swift Translation Portal/corridor configuration before production.
+    v2.1 BUG FIX: 54A (Receiver's Correspondent, option A) was missing from check_fields even though 53A and 55A - its exact
+    option-A counterparts on the other two reimbursement-agent fields - were both included, and 54A itself is mapped
+    elsewhere in this document as an ordinary expected field. A message carrying only 54A (no other 53/54/55 field) would
+    previously have been misclassified as INDA despite an explicit correspondent relationship being present. Added for
+    symmetry with 53A/53D and 55A/55B/55D.
+  edge_cases:
+  - condition: "None of 53A/54A/55A present, and the real settlement method for this corridor is not INDA"
+    handling: "reject is safer than silently mislabeling - change if_none_present to the correct code, or add a stricter check_fields/value-based
+      rule if INDA is not always correct"
+
+- source_field: "53A"
+  source_name: "Sender's Correspondent (option A only)"
+  target_path: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >
+    UHB p.206, verbatim: "comparable with the Field 53a in the legacy
+    FIN message." Relevant only when SttlmMtd=COVE (VR003). Option A
+    (BIC) only - 53B/53D not covered, no sourced line structure for
+    them (falls to unmapped_fields_policy=error, correctly).
+  edge_cases:
+  - condition: "Field absent"
+    handling: "reject only if SttlmMtd=COVE requires it; otherwise legitimately absent (Min 0)"
+
+- source_field: "54A"
+  source_name: "Receiver's Correspondent (option A only)"
+  target_path: "GrpHdr.SttlmInf.InstdRmbrsmntAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: "UHB p.206, verbatim: \"comparable with the Field 54a in the legacy FIN message.\" Option A only, same caveat as
+    53A."
+  edge_cases:
+  - condition: "Field absent"
+    handling: "reject only if required by SttlmMtd=COVE; otherwise legitimately absent"
+
+- source_field: "55A"
+  source_name: "Third Reimbursement Institution (option A only)"
+  target_path: "GrpHdr.SttlmInf.ThrdRmbrsmntAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: "UHB p.207, verbatim: \"comparable with the Field 55a in the legacy FIN message.\" Option A only."
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - Min 0 per UHB p.207"
+
+- source_field: "52A"
+  source_name: "Ordering Institution, option A (BIC)"
+  target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >-
+    52A Ordering Institution -> DebtorAgent. BIC is mapped to FinInstnId/BICFI. If 52a is absent, the MT sender is the standard
+    fallback for the mandatory DebtorAgent role in the MT103->pacs.008 translation context. The optional Party Identifier
+    must not be silently discarded: account identifiers belong in DbtrAgtAcct; clearing-system identifiers require a configured
+    clearing-system mapping.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error on its own - falls through to 52D, then to the Sender-BIC fallback below"
+
+- source_field: "52D"
+  source_name: "Ordering Institution, option D (name/address)"
+  target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      USER-PROVIDED RULE (2026-08-28): "52D present -> DbtrAgt using the
+      institution identification/address data." No exact SWIFT
+      line-format spec attached for 52D specifically; reusing this
+      document's existing optional-party-identifier-line convention
+      (same shape already used for 50F/50K/59F) as the closest
+      structurally-grounded parallel - first line beginning '/' is a
+      party identifier, remaining line(s) are name/address. UNVERIFIED
+      against actual 52D samples.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      Nm: line:0
+      AdrLine:
+        rule: lines_from:1
+        optional: true
+    sub_element_targets:
+      Nm: CdtTrfTxInf.DbtrAgt.FinInstnId.Nm
+      AdrLine: CdtTrfTxInf.DbtrAgt.FinInstnId.PstlAdr.AdrLine
+      Id: CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id
+    fallback_if_unparseable: raise_error
+  notes: >-
+    52D Ordering Institution option D maps name to FinInstnId/Nm and remaining name/address lines to FinInstnId/PstlAdr/AdrLine.
+    v2.1 BUG FIX: account_sub_element was declared as "Id" but had no corresponding sub_element_targets entry, so an extracted
+    Party Identifier line had no destination - it would either be silently dropped or crash the renderer, contradicting this
+    entry's own stated requirement that the identifier "must not be mislabelled as the institution name" (which implicitly
+    assumed it was being preserved somewhere). Routed to FinInstnId/Othr/Id - the generic identifier container in
+    FinancialInstitutionIdentification18, the same safe/no-guess choice already used for the CashAccount38 Othr/Id routing on
+    the account-portion entries elsewhere in this document (v1.13 changelog). Not routed to ClrSysMmbId because that requires
+    a specific clearing-system scheme code that cannot be reliably derived from an arbitrary "/xxx" line without a configured
+    clearing-system mapping table (see known_limitations and the audit's "Recommended next engineering changes").
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error on its own - falls through to the Sender-BIC fallback below"
+  - condition: "Content doesn't split cleanly"
+    handling: "reject - do not guess"
+  - condition: "First line is exactly '/' with no content after it"
+    handling: "reject - malformed party-identifier line, distinct from 'no leading slash at all' (which is the normal case
+      and means line:0 is the name, not an account/identifier line)"
+
+- source_field: "__MT_SENDER_BIC__"
+  source_name: "Debtor Agent fallback to the MT header Sender (Block 1) - used when 52A and 52D are both absent"
+  target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI"
+  mandatory: true
+  transformation: conditional
+  conditional:
+    check_fields: ["52A", "52D"]
+    skip_if_any_present: true
+    if_none_present_field: "__MT_SENDER_BIC__"
+  notes: >
+    v2.1 CITATION FIX: this fallback was originally recorded only as a "USER-PROVIDED RULE (2026-08-28)" with no independent
+    sourcing. It is now confirmed against the official Swift MT103 Standards field definition for 52a (Ordering Institution):
+    "Specifies the Financial Institution of the Ordering Customer, when different from the Sender." This is a universal
+    Swift FIN usage rule on the MT103 source side itself (not a CBPR+-only or TARGET2-only convention) - by definition, 52a
+    is only present when the ordering institution differs from the Sender, so its absence means the Sender IS the ordering
+    institution. Mapping that semantic to DbtrAgt on the target side is a faithful translation of the source rule, independent
+    of which MX target profile is in use. __MT_SENDER_BIC__ is a synthetic field populated by MtParserService from the MT
+    header's Logical Terminal Address (Block 1), which was NOT read at all before this fix - only Block 4 was parsed. Same
+    class of previously-unaddressed gap already flagged for Block 3/field 121 (UETR) elsewhere in this document. UNVERIFIED:
+    confirm Prowide's getSender()/block1 behavior against the actual pinned version once this compiles - see MtParserService's
+    own verification note.
+  edge_cases:
+  - condition: "52A and 52D both absent, and the MT header Sender cannot be determined"
+    handling: "reject - mandatory pacs.008 element, no other sourced fallback"
+
+- source_field: "__MT_SENDER_BIC__"
+  source_name: "Instructing Agent (MT header Sender, Block 1) - the CURRENT message hop, distinct from DbtrAgt"
+  target_path: "CdtTrfTxInf.InstgAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >
+    v2.3 GAP FIX (real-message comparison, 2026-08-31): InstgAgt/InstdAgt
+    were previously entirely unmapped - flagged as an open gap two rounds
+    earlier in this session, which the user deferred answering at the
+    time. A shared reference example supplied this round shows InstgAgt
+    populated from the message's actual Sender, DISTINCT from DbtrAgt
+    (52a/Sender-fallback): InstgAgt/InstdAgt represent the agents at THIS
+    specific interbank hop (who sent/received this particular message),
+    whereas DbtrAgt/CdtrAgt represent the originating debtor's and
+    ultimate creditor's banks across the whole payment chain, which can
+    legitimately differ from the immediate Sender/Receiver (e.g. a
+    correspondent relay). CdtTrfTxInf.InstgAgt/InstdAgt (not the
+    also-optional GrpHdr-level ones) chosen to match where the shared
+    reference example places them. Uses the SAME __MT_SENDER_BIC__
+    synthetic field already built for the DbtrAgt fallback above (no new
+    parsing needed) - unconditional direct_copy here since InstgAgt is
+    genuinely optional (minOccurs=0) in the schema, unlike DbtrAgt.
+  edge_cases:
+  - condition: "MT header Sender cannot be determined"
+    handling: "not an error - InstgAgt is optional; this entry simply produces no value"
+
+- source_field: "56A"
+  source_name: "Intermediary Institution (option A only)"
+  target_path: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >
+    UHB p.225, verbatim: "comparable with the Field 56a in the legacy
+    FIN message." Intermediary Agent 2/3 explicitly have "not comparable
+    field in the legacy FIN message" - confirmed NOT MAPPED. Option A
+    only; 56C/56D not covered.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - Min 0 per UHB p.225"
+
+- source_field: "71A"
+  source_name: "Details of Charges"
+  target_path: "CdtTrfTxInf.ChrgBr"
+  mandatory: false
+  transformation: code_list_lookup
+  code_list:
+    BEN: CRED
+    OUR: DEBT
+    SHA: SHAR
+  notes: >
+    UHB p.215, verbatim: "comparable with MT Field 71A 'Details of
+    Charges'." Pairing confirmed via explicit arrows in the source
+    diagram (BEN->CRED, OUR->DEBT, SHA->SHAR) - complete code set per
+    the page. Target-side SLEV has "no equivalent in legacy MT messages"
+    and "is removed from CBPR+ usage guideline specifications."
+  edge_cases:
+  - condition: "Value not one of BEN/OUR/SHA"
+    handling: "reject - code_list is exhaustive, no fallback"
+  - condition: "Field absent"
+    handling: "reject - Min 1 - Max 1 on target side per UHB p.215"
+
+- source_field: "71F"
+  source_name: "Sender's Charges - currency portion"
+  target_path: "CdtTrfTxInf.ChrgsInf#0.Amt.@Ccy"
+  mandatory: false
+  transformation: direct_copy
+  extract_pattern: "^([A-Z]{3})"
+  allowed_pattern: "^[A-Z]{3}$"
+  notes: >-
+    v2.6 STRUCTURAL FIX: previously 'unsupported' (hard reject whenever 71F was present) on the reasoning that Charges7's
+    Agt (agent BIC) has no source in the raw 71F value - true for the value itself, but NOT true for the field as a whole:
+    SWIFT's own field 71F definition is specific about who applied the charge - "Sender's Charges: specifies the currency
+    and amount of the transaction charges deducted BY THE SENDER" (i.e. already deducted before the message was sent).
+    That means the charging agent for 71F IS the message Sender, already available as __MT_SENDER_BIC__ - see the paired
+    Agt entry below. Split into three entries (currency, amount, agent) mirroring the 32A/33B composite-extraction pattern;
+    "#0" marks this as the FIRST ChrgsInf occurrence (ChrgsInf is maxOccurs=unbounded) - 71G below uses "#1", so both can
+    coexist as two separate repeated elements if both fields are present.
+  conditional_rules:
+  - condition: "ChrgBr = DEBT"
+    handling: "UHB p.216: only one pre-paid occurrence valid; deducted charges invalid (VR002, not machine-checked - see that rule's notes)"
+  edge_cases:
+  - condition: "First 3 characters not 3 uppercase letters"
+    handling: "reject - do not guess currency (enforced by allowed_pattern)"
+  - condition: "Field absent"
+    handling: "not an error - Min 0 per UHB p.216; none of the three paired 71F entries fire"
+
+- source_field: "71F"
+  source_name: "Sender's Charges - amount portion"
+  target_path: "CdtTrfTxInf.ChrgsInf#0.Amt"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  extract_pattern: "^[A-Z]{3}(.+)$"
+  notes: "Paired with the currency-portion entry above - see its notes."
+  edge_cases:
+  - condition: "Remainder is not a valid comma-decimal number"
+    handling: "reject - enforced by decimal_comma_to_dot"
+  - condition: "Field absent"
+    handling: "not an error"
+
+- source_field: "71F"
+  source_name: "Sender's Charges - charging agent (= MT Sender, per SWIFT field 71F's own definition)"
+  target_path: "CdtTrfTxInf.ChrgsInf#0.Agt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: conditional
+  conditional:
+    check_fields: ["71F"]
+    if_any_present_field: "__MT_SENDER_BIC__"
+    skip_if_none_present: true
+  notes: >-
+    Fires only when field 71F is present (gated on 71F's OWN presence, not __MT_SENDER_BIC__'s - the conditional
+    mechanism checks check_fields against the full parsed source message regardless of which field this entry nominally
+    reads from). Outputs the same __MT_SENDER_BIC__ value already used for the DbtrAgt/InstgAgt fallback entries -
+    no new parsing needed, just a new consumer of the existing synthetic field.
+  edge_cases:
+  - condition: "71F present but the MT header Sender cannot be determined"
+    handling: "reject - Charges7/Agt is mandatory whenever ChrgsInf is populated at all, no other sourced fallback"
+
+- source_field: "71G"
+  source_name: "Receiver's Charges - currency portion"
+  target_path: "CdtTrfTxInf.ChrgsInf#1.Amt.@Ccy"
+  mandatory: false
+  transformation: direct_copy
+  extract_pattern: "^([A-Z]{3})"
+  allowed_pattern: "^[A-Z]{3}$"
+  notes: >-
+    v2.6 STRUCTURAL FIX: mirrors the 71F entries above. SWIFT's field 71G definition: "Receiver's Charges: specifies the
+    currency and amount of the transaction charges to be deducted BY THE RECEIVER" - the charging agent for 71G IS the
+    message Receiver, already available as __MT_RECEIVER_BIC__. "#1" (not "#0") so a message carrying BOTH 71F and 71G
+    produces two distinct ChrgsInf occurrences rather than one entry's fields overwriting the other's.
+  edge_cases:
+  - condition: "First 3 characters not 3 uppercase letters"
+    handling: "reject - do not guess currency (enforced by allowed_pattern)"
+  - condition: "Field absent"
+    handling: "not an error - Min 0 per UHB p.216; none of the three paired 71G entries fire"
+
+- source_field: "71G"
+  source_name: "Receiver's Charges - amount portion"
+  target_path: "CdtTrfTxInf.ChrgsInf#1.Amt"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  extract_pattern: "^[A-Z]{3}(.+)$"
+  notes: "Paired with the currency-portion entry above - see its notes."
+  edge_cases:
+  - condition: "Remainder is not a valid comma-decimal number"
+    handling: "reject - enforced by decimal_comma_to_dot"
+  - condition: "Field absent"
+    handling: "not an error"
+
+- source_field: "71G"
+  source_name: "Receiver's Charges - charging agent (= MT Receiver, per SWIFT field 71G's own definition)"
+  target_path: "CdtTrfTxInf.ChrgsInf#1.Agt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: conditional
+  conditional:
+    check_fields: ["71G"]
+    if_any_present_field: "__MT_RECEIVER_BIC__"
+    skip_if_none_present: true
+  notes: "Mirrors the 71F agent entry above, using __MT_RECEIVER_BIC__ instead of __MT_SENDER_BIC__."
+  edge_cases:
+  - condition: "71G present but the MT header Receiver cannot be determined"
+    handling: "reject - Charges7/Agt is mandatory whenever ChrgsInf is populated at all, no other sourced fallback"
+
+- source_field: "72"
+  source_name: "Sender to Receiver Info - first /INS/ occurrence"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "BIC = value following /INS/ codeword; exact character-position rule not spelled out in attached
+      material."
+    sub_elements:
+      BICFI:
+        rule: "regex:/INS/(\\S+)"
+        optional: true
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
+    fallback_if_unparseable: raise_error
+  notes: >
+    UHB p.222, verbatim: "comparable with the Field 72 first /INS/
+    occurrence." Distinct from Intermediary Agent - a static/historical
+    role that "transition[s] into Intermediary Agents in the potential
+    return chain" (UHB p.224). Three entries below share source_field
+    "72", same pattern as the two 32A entries. v1.16 BUG FIX:
+    ConverterService's decompose_party handling always appends the
+    sub_elements key onto target_path unless sub_element_targets
+    overrides it - without the override above, this entry's actual
+    output path was 'CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI.BICFI'
+    (target_path + '.' + 'BICFI'), an invalid double-suffixed path that
+    never matched anything a validator or renderer expected. Never
+    triggered before because field 72 hadn't been exercised by a test
+    message yet. v1.22 BUG FIX: 'optional: true' added to BICFI - this
+    entry's own edge_cases always said "No /INS/ occurrence present -> not
+    an error - Min 0", but that was only true when field 72 was ABSENT
+    entirely (guarded earlier in ConverterService); when field 72 IS
+    present but uses a DIFFERENT codeword (e.g. /REC/, /ACC/ - field 72 is
+    a general-purpose free-text field, not exclusively /INS/), the regex
+    simply failed to match and, without optional:true, that counted as an
+    unparseable failure - falling through to an LLM call that would also
+    fail, throwing SemanticDecompositionGapException and blocking the
+    ENTIRE conversion. A real MT103 with field 72 present for a different
+    purpose than /INS/ is a common, not edge, case.
+  edge_cases:
+  - condition: "No /INS/ occurrence present"
+    handling: "not an error - Min 0"
+  - condition: "/INS/ present but unparseable"
+    handling: "reject - do not guess intended agent"
+
+- source_field: "72"
+  source_name: "Sender to Receiver Info - second /INS/ occurrence"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "Same as first /INS/ above. UNVERIFIED: regex must target the SECOND occurrence specifically, not
+      just first-match - confirm TransformationEngine does occurrence-indexed matching."
+    sub_elements:
+      BICFI:
+        rule: "regex:/INS/(\\S+)"
+        optional: true
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
+    fallback_if_unparseable: raise_error
+  notes: >
+    UHB p.222, verbatim: "comparable with the Field 72 second /INS/
+    occurrence." v1.16 BUG FIX: see the first /INS/ entry's notes above -
+    same double-suffix path bug, same fix. v1.22 BUG FIX: same
+    missing-optional:true bug as the first /INS/ entry - see its notes.
+  edge_cases:
+  - condition: "No second /INS/ occurrence"
+    handling: "not an error - Min 0"
+  - condition: "Second /INS/ without a first"
+    handling: "reject - do not guess ordering"
+
+- source_field: "72"
+  source_name: "Sender to Receiver Info - third /INS/ occurrence"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "Same occurrence-indexing caveat as second /INS/ above."
+    sub_elements:
+      BICFI:
+        rule: "regex:/INS/(\\S+)"
+        optional: true
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
+    fallback_if_unparseable: raise_error
+  notes: >
+    UHB p.222, verbatim: "comparable with the Field 72 third /INS/
+    occurrence." UHB p.225: if all three Previous Instructing Agents are
+    populated, Intermediary Agent should not also be used (VR004).
+    v1.16 BUG FIX: see the first /INS/ entry's notes above - same
+    double-suffix path bug, same fix. v1.22 BUG FIX: same
+    missing-optional:true bug as the first /INS/ entry - see its notes.
+  edge_cases:
+  - condition: "No third /INS/ occurrence"
+    handling: "not an error - Min 0"
+  - condition: "Third /INS/ without first/second"
+    handling: "reject - do not guess ordering"
+
+- source_field: "70"
+  source_name: "Remittance Info - End To End Id portion (/ROC/ codeword)"
+  target_path: "CdtTrfTxInf.PmtId.EndToEndId"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      If field begins /ROC/<value>/, <value> = End To End Id. Evidenced
+      only in REVERSE direction (pacs.008->MT103) in
+      inflow_translation_sample_messages_2025Q3 (e.g. TRAK/TROK/TRNR:
+      EndToEndId "e2eid-pacs.008-001" -> ":70:/ROC/e2eid-pacs.008-001").
+      Also documented for MT101-to-pacs.008 in
+      Derived_Mapping_Guidance.pdf p.10 - a DIFFERENT message type.
+      Applying to MT103 forward conversion is extrapolation, not a
+      direct citation.
+    sub_elements:
+      EndToEndId: "regex:^/ROC/([^/]+)/"
+    sub_element_targets:
+      EndToEndId: "CdtTrfTxInf.PmtId.EndToEndId"
+    fallback_if_unparseable: raise_error
+  notes: >
+    Split from the Ustrd entry below (one target_path per entry). v1.16
+    BUG FIX: without the override above, this entry's actual output path
+    was 'CdtTrfTxInf.PmtId.EndToEndId.EndToEndId' (target_path + '.' +
+    'EndToEndId') - meaning EndToEndId was NEVER actually populated by
+    this entry even when /ROC/ was present; every conversion silently
+    fell through to the target_defaults NOTPROVIDED fallback instead.
+    Same double-suffix bug as the 72/INS and 50A/59A-BIC entries.
+  edge_cases:
+  - condition: "Field doesn't begin /ROC/"
+    handling: "not an error - entry doesn't fire; EndToEndId falls back to NOTPROVIDED default (UHB p.209)"
+  - condition: "/ROC/ present but unparseable"
+    handling: "reject - do not guess"
+
+- source_field: "70"
+  source_name: "Remittance Info - free-text portion"
+  target_path: "CdtTrfTxInf.RmtInf.Ustrd"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "Content after any /ROC/<value>/ prefix (or entire field if no /ROC/) = Remittance Info. Same directionality
+      caveat as the EndToEndId entry above."
+    sub_elements:
+      Ustrd: "regex:(?:^/ROC/[^/]+/)?(.*)$"
+    sub_element_targets:
+      Ustrd: "CdtTrfTxInf.RmtInf.Ustrd"
+    fallback_if_unparseable: raise_error
+  notes: >
+    v1.16 BUG FIX: without the override above, this entry's actual
+    output path was 'CdtTrfTxInf.RmtInf.Ustrd.Ustrd' - same
+    double-suffix bug as the EndToEndId entry above and the 72/INS and
+    50A/59A-BIC entries; RmtInf/Ustrd was never actually populated by
+    this entry before this fix.
+    UHB p.243 gives the 140-char target limit ("to ensure backward
+    compatibility... during coexistence") but does not itself cite
+    Field 70 by name - correspondence inferred from naming symmetry plus
+    /ROC/ sample evidence.
+  edge_cases:
+  - condition: "Combined content exceeds 140 chars"
+    handling: >
+      reject rather than silently truncate. Sample TRNR
+      (inflow_translation_sample_messages_2025Q3): a 139-char source
+      Ustrd was still truncated once /ROC/ was appended - budget is
+      shared with the codeword, no exact formula sourced.
+  - condition: "Field absent"
+    handling: "not an error - optional"
+
+- source_field: "23B"
+  source_name: "Bank Operation Code"
+  target_path: "CdtTrfTxInf.PmtTpInf.LclInstrm.Prtry"
+  mandatory: false
+  transformation: direct_copy
+  notes: >-
+    23B:CRED/SPAY/SSTD/SPRI/CRTS -> PmtTpInf/LclInstrm/Prtry is retained. This is corroborated by public ISO migration mapping
+    material and current commercial MT103/pacs.008 mapping guides, and is consistent with the ISO purpose of LocalInstrument.
+    However, the exact current CBPR+ field-level rule is maintained in Swift MyStandards/Translation Portal and is not publicly
+    retrievable here; therefore this entry is NOT labelled as directly Swift-portal-certified. Do not remap 23B to SvcLvl/Cd:
+    that would be a closed ISO code-list guess.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error per general MT103 convention; M/O status not verified against an attached spec"
+  - condition: "Value contains characters invalid for LclInstrm/Prtry per the pacs.008 XSD"
+    handling: "reject - do not silently strip or re-encode; no sourced rule for how to handle this"
+
+- source_field: "50A"
+  source_name: "Ordering Customer, option A - BIC portion"
+  target_path: "CdtTrfTxInf.Dbtr.Id.OrgId.AnyBIC"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "Source: user-provided top-level mapping (Field 50 -> Debtor) only; no cited line-format rule for
+      option A specifically."
+    sub_elements:
+      BIC: "regex:(?:^/.+\\n)?(\\S+)$"
+    sub_element_targets:
+      BIC: "CdtTrfTxInf.Dbtr.Id.OrgId.AnyBIC"
+    fallback_if_unparseable: raise_error
+  notes: >
+    Split into per-option entries (50A/50F/50K) - Prowide never reports
+    a bare "50". v1.16 BUG FIX: without the override above, this
+    entry's actual output path was
+    'CdtTrfTxInf.Dbtr.Id.OrgId.AnyBIC.BIC' - same double-suffix bug as
+    the 72/INS and 70 entries; Dbtr's BIC was never actually populated
+    by this entry before this fix.
+  edge_cases:
+  - condition: "Content doesn't split into account line + BIC"
+    handling: "reject - do not guess"
+  - condition: "Field absent"
+    handling: "not an error; M/O unverified"
+
+- source_field: "50A"
+  source_name: "Ordering Customer, option A - account portion"
+  target_path: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >
+    Source: user-provided. STRUCTURAL FIX (v1.7): previously
+    decompose_party, which this schema hard-locks to raise on any
+    non-match ("no other fallback is implemented" per the schema's own
+    definition) - there is no way for that transformation type to
+    express "this sub-element is optional." A v1.4 documentation-only
+    fix (adding prose to pattern_description/edge_cases explaining
+    non-match is valid) did not change actual behavior, confirmed by an
+    identical-class error recurring against field 50K. Switched to
+    llm_assisted, which has no fallback_if_unparseable mechanism at
+    all - there is nothing to force a raise. DECISION PROCEDURE
+    (verbatim, for the conversion-time LLM step): "Look at the raw MT
+    field 50A value. If any line begins with '/', output everything
+    after the '/' on that line as the account identifier. If no line
+    begins with '/', output nothing (empty/null) - this means no
+    account is present, which is normal and not an error. Do not guess
+    or fabricate an account identifier."
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - this entry produces no value; DbtrAcct is left unpopulated from this source"
+  - condition: "Leading slash present with empty content after it"
+    handling: "reject - genuinely malformed, distinct from no-account-line-at-all"
+
+- source_field: "50F"
+  source_name: "Ordering Customer, option F - account portion only"
+  target_path: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    Numbered F-option customer data is structured MT data. The account portion may be copied to the corresponding Account/Id/Othr/Id,
+    but a successful conversion must also preserve the numbered name/address data. This mapping document does not invent a
+    postal decomposition for ambiguous 3/ lines; until the engine supports the exact CBPR+ hybrid-address extraction contract,
+    a message using F-option data that cannot be structurally preserved must fail rather than silently dropping the customer
+    identity/address.
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - this entry produces no value; expected for the common case of a name/address-only 50F value"
+  - condition: "Leading slash present with empty content after it"
+    handling: "reject - genuinely malformed, distinct from no-account-line-at-all"
+
+- source_field: "50K"
+  source_name: "Ordering Customer, option K - name/address portion"
+  target_path: "CdtTrfTxInf.Dbtr"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      USER-PROVIDED RULE (2026-08-31, business-correctness review):
+      MT103 field 50K (Ordering Customer) maps to pacs.008 Dbtr -
+      name/address, not just the account portion the entry above
+      already extracts. 50K carries PLAIN unstructured lines (unlike
+      50F's numbered 1/2/3/ line-code convention, which this document
+      still does not cover - see known_limitations), so: first
+      non-account line = Nm; every remaining line = its own repeated
+      AdrLine (PostalAddress24/AdrLine, maxOccurs=7). EXPLICITLY NOT
+      decomposing address text into TwnNm/Ctry/PstCd/etc - those are
+      not discrete data in the MT103, and inventing that structure from
+      free text would be a guess, not a mapping. This also matters given
+      SWIFT's move away from unstructured postal addresses in CBPR+
+      (effective November 2026) - Town/Country will need to come from
+      designated fields once available, not be parsed out of AdrLine
+      text.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm: "line:0"
+      AdrLine:
+        rule: "lines_from:1"
+        optional: true
+    sub_element_targets:
+      AccountId: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+      AdrLine: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    v1.16 GAP FIX: this document previously had NO entry populating Dbtr.Nm/PstlAdr for 50K at all - only a separate
+    account-only entry existed (targeting DbtrAcct.Id.Othr.Id), so Dbtr rendered entirely empty even when a real name/address
+    was present (the v1.12 empty-Dbtr placeholder default masked this by making it schema-VALID, but not business-correct).
+
+    v2.1 DEDUP FIX: the standalone account-only 50K entry (llm_assisted, same target CdtTrfTxInf.DbtrAcct.Id.Othr.Id) has been
+    removed. It independently re-parsed the identical raw 50K value through a different mechanism (LLM-driven free-text
+    instruction vs this entry's deterministic account_line_pattern regex) to produce the same output - a genuine duplicate
+    write, not merely "redundant-but-harmless" as previously documented, since the two mechanisms had no guarantee of staying
+    in agreement on edge cases (whitespace, multiple slash-prefixed lines, etc.) and any future divergence would go
+    undetected. This entry alone is now the single source of both Dbtr/Nm+PstlAdr/AdrLine and DbtrAcct/Id/Othr/Id for 50K.
+
+    Strict profile: if the MT field is selected as the ordering/beneficiary customer, the name must populate Dbtr/Cdtr. Do
+    not emit an empty party merely to satisfy XSD; missing mandatory customer data must fail conversion.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - Dbtr then falls back to the v1.12 empty-placeholder target_default"
+  - condition: "Only a name line present, no address line"
+    handling: "not an error - AdrLine is optional"
+  - condition: "No line begins with '/' (plain name/address content, e.g. 'JOHN DOE 123 MAIN STREET')"
+    handling: "not an error - this is the normal, common case for 50K; AccountId/DbtrAcct is simply left unpopulated from
+      this source"
+  - condition: "A line is exactly '/' with no content after it"
+    handling: "reject - genuinely malformed account line, distinct from 'no account line present at all'"
+
+- source_field: "59A"
+  source_name: "Beneficiary Customer, option A - BIC portion"
+  target_path: "CdtTrfTxInf.Cdtr.Id.OrgId.AnyBIC"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      Same source tier as 50A (Field 59 -> Creditor). This BIC-portion
+      entry's regex already contains its own optional group for the
+      account line "(?:^/.+\n)?" and is designed to match on both
+      with-account and without-account input, so it is lower-risk than
+      the plain-AccountId entries - but this has not been independently
+      verified against the actual engine's occurrence-matching
+      behavior, and the same "no other fallback implemented" constraint
+      applies if it ever fails to match at all (e.g. genuinely empty
+      field content).
+    sub_elements:
+      BIC: "regex:(?:^/.+\\n)?(\\S+)$"
+    sub_element_targets:
+      BIC: "CdtTrfTxInf.Cdtr.Id.OrgId.AnyBIC"
+    fallback_if_unparseable: raise_error
+  notes: >
+    Split into per-option entries (59/59A/59F) same as Field 50.
+    UNVERIFIED against the engine - see decomposition.pattern_description
+    caveat. v1.16 BUG FIX: without the override above, this entry's
+    actual output path was 'CdtTrfTxInf.Cdtr.Id.OrgId.AnyBIC.BIC' - same
+    double-suffix bug as the 50A-BIC entry; Cdtr's BIC was never
+    actually populated by this entry before this fix.
+  edge_cases:
+  - condition: "Content doesn't split into account line + BIC"
+    handling: "reject"
+  - condition: "Field absent"
+    handling: "not an error"
+
+- source_field: "59A"
+  source_name: "Beneficiary Customer, option A - account portion"
+  target_path: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >
+    Source: user-provided. STRUCTURAL FIX (v1.7): same rationale as the
+    50A account entry - moved off decompose_party after the v1.4
+    documentation-only fix failed to change actual behavior for the
+    analogous 50K entry. DECISION PROCEDURE (verbatim): "Look at the raw
+    MT field 59A value. If any line begins with '/', output everything
+    after the '/' on that line as the account identifier. If no line
+    begins with '/', output nothing - this is normal and not an error.
+    Do not guess or fabricate an account identifier."
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "Leading slash present with empty content after it"
+    handling: "reject - genuinely malformed"
+
+- source_field: "59"
+  source_name: "Beneficiary Customer, no letter - name/address portion"
+  target_path: "CdtTrfTxInf.Cdtr"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      USER-PROVIDED RULE (2026-08-31, business-correctness review):
+      MT103 field 59 (no letter, Beneficiary Customer) maps to
+      pacs.008 Cdtr - name/address, not just the account portion the
+      entry above already extracts. Same PLAIN unstructured-line shape
+      as 50K (unlike 59F's numbered-line convention, still not covered
+      - see known_limitations): first non-account line = Nm; every
+      remaining line = its own repeated AdrLine. Same explicit
+      exclusion as the 50K entry: NOT decomposing address text into
+      TwnNm/Ctry/PstCd/etc.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm: "line:0"
+      AdrLine:
+        rule: "lines_from:1"
+        optional: true
+    sub_element_targets:
+      AccountId: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+      AdrLine: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    v1.16 GAP FIX: mirrors the 50K Dbtr entry above - this document previously had no entry populating Cdtr.Nm/PstlAdr for
+    bare 59 at all, so Cdtr rendered entirely empty even when a real name/address was present.
+
+    v2.1 DEDUP FIX: mirrors the 50K fix above - the standalone account-only bare-59 entry (llm_assisted, same target
+    CdtTrfTxInf.CdtrAcct.Id.Othr.Id) has been removed as a genuine duplicate write of the same raw value through two
+    different parsing mechanisms. This entry alone is now the single source of both Cdtr/Nm+PstlAdr/AdrLine and
+    CdtrAcct/Id/Othr/Id for bare 59.
+
+    Strict profile: if the MT field is selected as the ordering/beneficiary customer, the name must populate Dbtr/Cdtr. Do
+    not emit an empty party merely to satisfy XSD; missing mandatory customer data must fail conversion.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - Cdtr then falls back to the v1.12 empty-placeholder target_default"
+  - condition: "Only a name line present, no address line"
+    handling: "not an error - AdrLine is optional"
+  - condition: "No line begins with '/' (plain name/address content)"
+    handling: "not an error - this is the normal, common case for bare 59; AccountId/CdtrAcct is simply left unpopulated
+      from this source"
+  - condition: "A line is exactly '/' with no content after it"
+    handling: "reject - genuinely malformed account line, distinct from 'no account line present at all'"
+
+- source_field: "59F"
+  source_name: "Beneficiary Customer, option F - account portion only"
+  target_path: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    Numbered F-option customer data is structured MT data. The account portion may be copied to the corresponding Account/Id/Othr/Id,
+    but a successful conversion must also preserve the numbered name/address data. This mapping document does not invent a
+    postal decomposition for ambiguous 3/ lines; until the engine supports the exact CBPR+ hybrid-address extraction contract,
+    a message using F-option data that cannot be structurally preserved must fail rather than silently dropping the customer
+    identity/address.
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - this entry produces no value"
+
+- source_field: "33B"
+  source_name: "Currency/Instructed Amount - currency portion"
+  target_path: "CdtTrfTxInf.InstdAmt.@Ccy"
+  mandatory: false
+  transformation: direct_copy
+  extract_pattern: "^([A-Z]{3})"
+  allowed_pattern: "^[A-Z]{3}$"
+  notes: >
+    v1.11 STRUCTURAL FIX: same class of fix as the 32A/IntrBkSttlmAmt
+    entries above - split off from a single llm_assisted entry that
+    targeted InstdAmt directly, which would hit the identical
+    'Attribute Ccy must appear' XSD error as IntrBkSttlmAmt did
+    (ActiveOrHistoricCurrencyAndAmount also has a mandatory Ccy
+    attribute, not a child element), and a single llm_assisted call is
+    structurally incapable of populating both the attribute and the
+    text content. See the 32A entries' notes for the full rationale.
+    Source: user-provided instruction, not attached material - zero
+    citation hits for "Field 33B" anywhere in the UHB pacs.008 section.
+    UHB p.214 describes the target element's own rule (VR001) without
+    naming the source MT tag - that citation supports the target
+    element's behavior, not this source-to-target mapping.
+  conditional_rules:
+  - condition: "InstdAmt currency differs from IntrBkSttlmAmt currency"
+    handling: "XchgRate becomes mandatory on the target side (VR001) - not enforced by this entry, see validation_rules"
+  edge_cases:
+  - condition: "First 3 characters not 3 uppercase letters"
+    handling: "reject - do not guess currency (enforced by allowed_pattern)"
+  - condition: "Field absent"
+    handling: "not an error - 33B is conditional in MT103; M/O status unverified against an attached spec"
+
+- source_field: "33B"
+  source_name: "Currency/Instructed Amount - amount portion"
+  target_path: "CdtTrfTxInf.InstdAmt"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  extract_pattern: "^[A-Z]{3}(.+)$"
+  notes: >
+    v1.11 STRUCTURAL FIX: paired with the currency-portion entry above.
+    Comma-to-dot conversion uses the engine's existing
+    decimal_comma_to_dot transformation, applied to whatever
+    extract_pattern pulls out past the 3-letter currency prefix -
+    deterministic, no LLM needed.
+  conditional_rules:
+  - condition: "InstdAmt currency differs from IntrBkSttlmAmt currency"
+    handling: "XchgRate becomes mandatory on the target side (VR001) - not enforced by this entry, see validation_rules"
+  edge_cases:
+  - condition: "Remainder is not a valid comma-decimal number"
+    handling: "reject - enforced by decimal_comma_to_dot"
+  - condition: "Field absent"
+    handling: "not an error - 33B is conditional in MT103; M/O status unverified against an attached spec"
+
+- source_field: "36"
+  source_name: "Exchange Rate"
+  target_path: "CdtTrfTxInf.XchgRate"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  notes: >
+    v1.11 BUG FIX: this entry's own previous notes claimed "the
+    comma/dot conversion itself still has no dedicated transformation
+    type in this schema's enum" and used direct_copy - that claim was
+    simply wrong; decimal_comma_to_dot has existed in
+    TransformationEngine all along and is used elsewhere in this same
+    document (e.g. the 32A/33B amount entries). Under direct_copy, a raw
+    value like "1,25" was passed through unconverted into XchgRate,
+    which is BaseOneRate (a plain xs:decimal, comma-separators are not
+    valid xs:decimal syntax) - this would have failed XSD validation the
+    first time a real message carried field 36, the same class of bug
+    as the 32A/33B Ccy-attribute issue, just not yet triggered because
+    no test message had exercised field 36. Source: user-provided
+    instruction, not attached material - zero citation hits for "Field
+    36" anywhere in the UHB pacs.008 section. UHB p.214's cross-element
+    rule (VR001) describes the target element's own behavior without
+    naming the source MT tag.
+  conditional_rules:
+  - condition: "InstdAmt present with currency differing from IntrBkSttlmAmt"
+    handling: "this field becomes mandatory per VR001 - not enforced by this entry"
+  edge_cases:
+  - condition: "Value is not a valid decimal"
+    handling: "reject - do not guess rate"
+  - condition: "Field absent"
+    handling: "not an error unless VR001's condition is met, in which case absence should be flagged by the validator, not
+      this entry"
+
+- source_field: "57A"
+  source_name: "Account With Institution (option A only)"
+  target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >-
+    57A Account With Institution -> CreditorAgent. BIC maps to FinInstnId/BICFI. If 57a is absent, the receiver BIC is used
+    as the CreditorAgent fallback in the MT103->pacs.008 translation context. Preserve a Party Identifier as CreditorAgentAccount
+    or clearing-system identification; do not drop it.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error on its own - falls through to 57D, then to the Receiver-BIC fallback below"
+
+- source_field: "57D"
+  source_name: "Account With Institution (option D - name/address)"
+  target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >
+      User-provided rule (2026-08-28): "57D present -> CdtrAgt using
+      institution identification/address data." No exact SWIFT
+      line-format spec attached for 57D specifically; reusing this
+      document's existing optional-party-identifier-line convention
+      (same shape already used for 50F/50K/59F) as the closest
+      structurally-grounded parallel - first line beginning '/' is a
+      party identifier, remaining line(s) are name/address. UNVERIFIED
+      against actual 57D samples.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      Nm: line:0
+      AdrLine:
+        rule: lines_from:1
+        optional: true
+    sub_element_targets:
+      Nm: CdtTrfTxInf.CdtrAgt.FinInstnId.Nm
+      AdrLine: CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr.AdrLine
+      Id: CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id
+    fallback_if_unparseable: raise_error
+  notes: >-
+    57D Account With Institution option D maps name to FinInstnId/Nm and remaining lines to FinInstnId/PstlAdr/AdrLine.
+    v2.1 BUG FIX: same class of fix as the 52D entry above - account_sub_element "Id" previously had no sub_element_targets
+    destination, so the Party Identifier this entry's own notes said "must be preserved" had nowhere to actually be written.
+    Routed to FinInstnId/Othr/Id, the generic identifier container, for the same no-guess reasoning as 52D above. If the
+    engine later adds a configured clearing-system mapping table, a value matching a known clearing code should route to
+    ClrSysMmbId instead - until then, Othr/Id is the safe default.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error on its own - falls through to the Receiver-BIC fallback below"
+  - condition: "Content doesn't split cleanly"
+    handling: "reject - do not guess"
+  - condition: "First line is exactly '/' with no content after it"
+    handling: "reject - malformed party-identifier line, distinct from 'no leading slash at all'"
+
+- source_field: "__MT_RECEIVER_BIC__"
+  source_name: "Creditor Agent fallback to the MT header Receiver (Block 2) - used when 57A and 57D are both absent"
+  target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
+  mandatory: true
+  transformation: conditional
+  conditional:
+    check_fields: ["57A", "57D"]
+    skip_if_any_present: true
+    if_none_present_field: "__MT_RECEIVER_BIC__"
+  notes: >
+    v2.1 CRITICAL CORRECTION: this entry previously justified itself by claiming "User confirmed (2026-08-31): this
+    deployment targets TARGET2 specifically" and pointed to scope_notes for "the confirmed TARGET2 declaration" - but
+    scope_notes explicitly states the opposite: "The user does not target TARGET2 specifically... No TARGET2-specific rule
+    is treated as a universal SWIFT rule." That was a direct, uncorrected contradiction between this entry and the document's
+    own stated target profile, left over from this entry's original v1.9 drafting before the profile was changed to CBPR+.
+    It is also independently unsound on the merits: Target2 stopped using MT altogether after its November 2022 migration to
+    native ISO 20022 (MX), so a "TARGET2 MT->ISO mapping" describing an ongoing MT103->pacs.008 translation rule does not
+    correspond to anything TARGET2 actually does today; and TARGET2's SettlementMethod is CLRG, not the INDA/COVE binary
+    this document's GENERATED:SttlmMtd rule implements a few hundred lines below - so even on its own terms, this document
+    was never actually configured for a TARGET2 deployment.
+
+    CORRECTED SOURCING: the underlying fallback behavior (Receiver -> CdtrAgt when 57a absent) is retained, but is now
+    grounded in the correct citation - the official Swift MT103 Standards field definition for 57a (Account With Institution):
+    "When field 57a is not present, it means that the Receiver is also the account with institution." This is a universal
+    Swift FIN usage rule on the MT103 source side itself, not a TARGET2-only or otherwise market-specific convention, and
+    it mirrors the equally universal 52a rule used for the DbtrAgt/Sender fallback above. Mapping this source-side semantic
+    to CdtrAgt is a faithful translation regardless of which MX target profile (CBPR+ or otherwise) is in use.
+
+    __MT_RECEIVER_BIC__ is a synthetic field populated by MtParserService from the MT header's Block 2 (application header)
+    Receiver address - a full 12-character SWIFT LT address (BIC8 + 1-char terminal identifier + 3-char branch), normalized
+    to the correct 11-character BIC (BIC8 + branch, dropping ONLY the terminal identifier - see MtParserService's
+    normalizeToBicCore(), fixed in v2.3: previously wrongly truncated to bare BIC8, discarding the branch code) since
+    BICFIDec2014Identifier's pattern doesn't accept the raw 12-char form.
+  edge_cases:
+  - condition: "57A and 57D both absent, and the MT header Receiver cannot be determined"
+    handling: "reject - mandatory pacs.008 element, no other sourced fallback"
+
+- source_field: "__MT_RECEIVER_BIC__"
+  source_name: "Instructed Agent (MT header Receiver, Block 2) - the CURRENT message hop, distinct from CdtrAgt"
+  target_path: "CdtTrfTxInf.InstdAgt.FinInstnId.BICFI"
+  mandatory: false
+  transformation: direct_copy
+  notes: >
+    v2.3 GAP FIX: mirrors the InstgAgt/Sender entry above - see its notes
+    for the InstgAgt/DbtrAgt distinction, which applies symmetrically
+    here (InstdAgt = this message's Receiver; CdtrAgt = the ultimate
+    creditor's bank via 57a/Receiver-fallback, which can differ in a
+    correspondent-relay scenario). Uses the SAME __MT_RECEIVER_BIC__
+    synthetic field already built for the CdtrAgt fallback above.
+  edge_cases:
+  - condition: "MT header Receiver cannot be determined"
+    handling: "not an error - InstdAgt is optional; this entry simply produces no value"
+
+known_limitations:
+- "v2.6 CHANGELOG NOTE: 71F/71G were reverted to 'unsupported' (hard reject) by an intervening edit, undoing this session's earlier 'skip_with_warning' decision - but on being asked to explain the underlying gap rather than just pick between reject/skip, found a real fix instead of either. SWIFT's own field definitions are specific about the charging agent: field 71F is 'charges deducted BY THE SENDER', field 71G is 'charges to be deducted BY THE RECEIVER' - so the Agt Charges7 requires is not actually undeterminable, it's the MT header Sender (for 71F) / Receiver (for 71G), both already available as __MT_SENDER_BIC__/__MT_RECEIVER_BIC__. Rebuilt as three entries each (currency via extract_pattern+direct_copy+allowed_pattern, amount via extract_pattern+decimal_comma_to_dot, agent via the existing conditional/if_any_present_field/skip_if_none_present mechanism keyed on the SAME field's own presence) - mirrors the 32A/33B composite-extraction pattern. Uses '#0'/'#1' (ChrgsInf is maxOccurs=unbounded) so a message with BOTH 71F and 71G produces two distinct occurrences rather than one overwriting the other. Removed the now-dead 'unsupported' transformation type's only two callers - the engine capability itself (TransformationEngine.unsupported/ConverterService) is left in place for any future genuinely-unfixable gap, just unused in this document for now."
+- "v2.5 CHANGELOG NOTE (decisions recorded, no code/mapping change): two items had been raised repeatedly across several review passes (v2.1 through v2.3) without a final answer, re-litigating the same ground each time. User explicitly decided both this round (2026-08-31), recorded here so a future review doesn't re-open them without new information: (1) EndToEndId KEEPS the existing UHB p.209-cited NOTPROVIDED default (from /ROC/ in field 70 when present, else NOTPROVIDED) - the field-20-reuse alternative proposed in several reviews is explicitly NOT adopted; do not silently switch this again without a fresh explicit decision, since it directly overrides a cited source. (2) The Envelope/AppHdr (head.001.001.01) wrapper stays OUT OF SCOPE for now, consistent with the original v1.0 scope_notes exclusion - this converter continues to emit a bare pacs.008 Document payload, not a full SWIFT-transmittable envelope. If this is needed later, the open question is which network's BizSvc identifier applies (this document targets CBPR+ per the v2.1 profile decision, not TARGET2)."
+- "v2.4 CHANGELOG NOTE (ENGINE FIX): fixed VR008 firing unconditionally - its own description explicitly scopes it to 'if converted after 14 November 2026', but the v2.2 implementation had no date-gating at all, so it incorrectly hard-failed conversions run today (2026-08-31), months before its stated effective date. Added evalStructuredAddress() date-gating: params.effective_date (ISO yyyy-MM-dd) - the rule doesn't apply at all (not even a warning) until the current date reaches it. VR008's own params now sets effective_date: '2026-11-14', matching its description. A malformed/unparseable effective_date fails safe (rule treated as not yet active, not as a crash or an unconditional enforcement)."
+- "v2.3 CHANGELOG NOTE (real-message comparison, 2026-08-31): four changes, one pushback-with-evidence, three items left open pending user decision. FIXED: (1) MtParserService.normalizeToBicCore() was truncating a 12-char SWIFT LT address to bare BIC8, discarding the branch code entirely ('APACGB61AXXX' -> wrongly 'APACGB61' instead of correctly 'APACGB61XXX') - fixed to drop only the single LT-identifier character at position 9, keeping BIC8+branch, per standard SWIFT LT-address format (BIC8 + 1-char terminal id + 3-char branch). (2) Added InstgAgt/InstdAgt (CdtTrfTxInf level), sourced from the MT header Sender/Receiver via the existing __MT_SENDER_BIC__/__MT_RECEIVER_BIC__ synthetic fields - closes a gap flagged two rounds earlier that the user had deferred; distinct from DbtrAgt/CdtrAgt (this-hop agents vs whole-chain agents). (3) GrpHdr/MsgId switched from a generated UUID to reusing field 20 (Sender's Reference) - a common real-world convention, not in conflict with any existing UHB citation (unlike EndToEndId, see below) - tradeoff (field-20 uniqueness is only sender-local, not global like a UUID) stated explicitly in that entry's notes. PUSHBACK, not applied: a reviewer's 'corrected' example omitted GrpHdr/SttlmInf/SttlmMtd entirely, calling it un-derivable and un-sourced - but SttlmInf has no minOccurs=0 in GroupHeader93 (re-verified directly against the supplied XSD, line 553) and is therefore genuinely MANDATORY; omitting it would fail XSD validation outright, not fix anything. The existing GENERATED:SttlmMtd entry's own extensive documented caveat (INDA-when-absent is an assumption, not a sourced fact) already covers the legitimate part of this concern. LEFT OPEN (conflicts with existing sourced material or a prior explicit user decision - not silently changed either way): EndToEndId reuse of field 20 was proposed, but this document's EndToEndId entry already has a specific UHB p.209 citation for a 'NOTPROVIDED' literal default when no /ROC/ reference exists in field 70 - a source conflict, not resolved here. PmtTpInf/LclInstrm/Prtry (23B) removal was proposed again - the user already explicitly confirmed 'leave as-is' when this exact question was raised previously; not re-litigated without the user revisiting that decision. The Envelope/AppHdr (head.001.001.01) wrapper remains unbuilt - asked about previously and the user's answer was dismissed without a response that round."
+- "v2.2 CHANGELOG NOTE (validation overhaul, 2026-08-31): three engine-level additions, requested to move validation closer to real SWIFT-standard checking rather than just XSD presence. (1) PROACTIVE SCHEMA COMPLETENESS CHECK: XsdOrderingIndex now also indexes each complexType's mandatory children (sequence minOccurs, xs:choice treated as 'at least one branch', not 'all branches mandatory' - avoids false positives like CashAccount38/Id/IBAN when only Othr is used) and mandatory attributes (simpleContent/extension/attribute use=required). ValidatorService walks this top-down BEFORE the reactive SAX XSD pass, only descending into containers already populated - catches the exact class of bug this engine kept hitting one field at a time over many rounds (missing GrpHdr, Dbtr, Ccy attributes, ...) with a clear field-path message instead of SAX's sometimes-cryptic wording. Shared the XSD-loading/caching logic between MxRenderer and ValidatorService via a new XsdIndexRegistry rather than duplicating it. Also fixed a pre-existing retry-classification gap while touching this: SAX XSD errors and the new completeness-check errors are DETERMINISTIC (retrying the converter can never fix a missing schema element), but neither message ever matched the MAPPING_GAP substring check, so both were silently burning max-converter-retries attempts before eventually failing anyway - now classified MAPPING_GAP immediately. (2) REAL validation_rules ENGINE: added rule_type + params to ValidationRule (generic map, not one Java field per rule shape) and six evaluators in ValidatorService (conditional_currency_mismatch_requires, presence_requires_value, mutual_exclusion, source_alternative_group_required, currency_precision_check using standard ISO 4217 minor-unit exceptions, structured_address_required) - VR001/VR003/VR004/VR005/VR007/VR008 are now actually machine-checked instead of descriptive-only text 'recorded for reviewer judgement'; VR002 and VR006 stay descriptive (see their own entries for why - VR002 because ChrgsInf has no real support to check against, VR006 because it's already naturally enforced by the target_defaults removal + the new completeness check together, not a distinct rule shape). (3) LLM AUDIT (Layer 2) ROBUSTNESS: semanticAudit() is now wrapped so a transient LLM API failure degrades to a warning (deterministic checks already passed by the time Layer 2 runs) instead of failing an otherwise-valid conversion outright - new ValidationReport.llmAuditStatus (ran/error/skipped_not_reached) lets a caller tell 'clean because both layers passed' apart from 'clean because Layer 2 never actually ran'. Added a sanity cross-check on the audit's own is_valid vs findings fields, a lightweight hallucination guard flagging findings that reference a field not found anywhere in this mapping doc, symmetric retry-on-malformed-JSON for the Groq path (previously only Gemini had it), and trimmed the audit prompt to each field's first sentence of notes instead of the full multi-paragraph changelog history now embedded in most entries - was inflating token cost/latency and diluting the model's attention for no benefit to the actual audit."
+- "v2.1 CHANGELOG NOTE (independent verification pass, 2026-08-31): five fixes from an external review of v2.0. (1) CRITICAL
+  CONTRADICTION FIX: the __MT_RECEIVER_BIC__ (CdtrAgt fallback) entry previously claimed 'User confirmed... this deployment
+  targets TARGET2 specifically' and cited scope_notes for that declaration - but scope_notes explicitly states the opposite
+  target-profile decision (CBPR+, not TARGET2). This was a direct, uncorrected self-contradiction left over from the entry's
+  v1.9 drafting. The false TARGET2 citation is removed; the fallback behavior itself is retained but re-grounded in the
+  correct, verified, universal Swift MT103 field 57a usage rule ('When field 57a is not present, it means that the Receiver
+  is also the account with institution') - a source-side rule independent of target network. The parallel 52a/DbtrAgt
+  fallback (__MT_SENDER_BIC__) is likewise re-grounded in the equivalent verified 52a usage rule ('Specifies the Financial
+  Institution of the Ordering Customer, when different from the Sender'). (2) DUPLICATE MAPPING FIX: removed the standalone
+  account-only llm_assisted entries for 50K and bare-59, which independently re-parsed the same raw source value as the
+  v1.16 name/address decompose_party entries' account_sub_element and wrote to the identical target path - a genuine
+  duplicate write via two different mechanisms (LLM vs regex), not merely 'redundant-but-harmless' as v2.0 characterized it.
+  The decompose_party entries alone now own both the account and name/address extraction for 50K and bare 59, with the
+  malformed-empty-account-line edge case carried over into them so no coverage was lost. (3) BUG FIX: 52D and 57D declared
+  account_sub_element: 'Id' but had no corresponding sub_element_targets entry, so an extracted Party Identifier line had no
+  destination - contradicting both entries' own notes that it 'must not be' dropped/discarded. Added Id -> FinInstnId/Othr/Id
+  targets (the same safe generic-identifier container already used elsewhere in this document for account portions), rather
+  than guessing a ClrSysMmbId scheme code. (4) INCONSISTENCY FIX: added 54A to the GENERATED:SttlmMtd check_fields list -
+  it was missing while its option-A counterparts 53A and 55A were both present, and 54A is mapped elsewhere in this document
+  as an ordinary field, so a message with only 54A present was previously misclassified as INDA. (5) SCOPE ADDITION: added an
+  OPERATIONAL SCOPE paragraph to scope_notes noting that Swift's CBPR+ MT/MX coexistence period for cross-border payments
+  ended November 2025 and live cross-border traffic is now MX-native, so this converter's actual use case (archival,
+  domestic/non-Swift MT103, reconciliation, or test tooling) should be confirmed before production use. No other field
+  mappings, transformations, or fail-closed decisions from v2.0 were changed."
+- "v1.18 CHANGELOG NOTE (ENGINE FIX + mapping-doc fix): fixed 'cvc-complex-type.2.3: Element ChrgsInf cannot have character
+  [children], because the type's content type is element-only.' Root cause: ChrgsInf is Charges7, a structured complex type
+  requiring BOTH Amt (currency+amount, itself needing a Ccy attribute) and Agt (agent BICFI) - not a plain value. The 71F/71G
+  entries used direct_copy, writing the raw MT value as TEXT CONTENT straight into ChrgsInf, which Charges7's element-only
+  content model forbids entirely, on top of missing Agt (this document's own pre-existing notes already said 'Agent BIC undeterminable
+  - source material doesn't say where to get it (gap)' and 'reject - no sourced default' in edge_cases, but the actual entry
+  never implemented that rejection - it just wrote invalid text instead). Added a new 'unsupported' transformation type (TransformationEngine/ConverterService)
+  that raises a clear, specific error only when the field actually has a value - for entries a mapping doc's own notes already
+  document as genuinely unmappable in their current form, rather than leaving them to silently write structurally-invalid
+  output. Proactively scanned every other target_path in this document for the same 'leaf value into a structured complex
+  type' shape (only decompose_party entries, already fixed in v1.9-v1.16, and llm_assisted/direct_copy entries checked against
+  the XSD's complexType definitions) - no other instances found."
+- "v1.16 CHANGELOG NOTE: two changes from a business-correctness review (2026-08-31). (1) BUG FIX: found and fixed a pre-existing,
+  systemic bug (present before this session, not introduced by it) in 7 decompose_party entries - 50A-BIC, 59A-BIC, the three
+  72 /INS/ entries, and both 70 entries - which set target_path to the exact intended destination while ConverterService always
+  appends the sub_elements key on top unless overridden, producing invalid double-suffixed paths (e.g. 'CdtTrfTxInf.PmtId.EndToEndId.EndToEndId').
+  This meant EndToEndId was NEVER populated by its /ROC/ entry even when the prefix was present - every conversion silently
+  fell through to the v1.9 NOTPROVIDED target_default instead - and Dbtr/Cdtr's BIC-portion entries (50A/59A) never worked
+  either. Fixed by adding sub_element_targets overrides to all 7, routing explicitly to target_path. (2) GAP FIX: added real
+  Dbtr/Cdtr Nm/PstlAdr population for 50K and bare-59 (the plain-unstructured-line shape) - first line -> Nm, remaining line(s)
+  -> repeated AdrLine elements (new lines_from: decomposition rule + '#N' repeated-element convention in ConverterService/MxRenderer/XsdOrderingIndex,
+  generically reusable for any other repeated ISO 20022 element, e.g. ChrgsInf, RgltryRptg). Per explicit user instruction:
+  does NOT decompose address text into TwnNm/Ctry/PstCd - not discretely present in the MT103, and CBPR+'s move away from
+  unstructured postal addresses (Nov 2026) makes guessing that structure inappropriate. 50F/59F (numbered-line format) remain
+  unresolved - see that known_limitations entry."
+- "v1.15 CHANGELOG NOTE (ENGINE FIX, not a mapping-doc change): fixed 'cvc-pattern-valid: Value BANKBEBBAXXX is not facet-valid...for
+  type BICFIDec2014Identifier' surfaced via the __MT_SENDER_BIC__/__MT_RECEIVER_BIC__ fallback entries (v1.9/v1.10). Root
+  cause: MtParserService's manual Block1/Block2 truncation-to-8-chars logic only ran when Prowide's getSender()/getReceiver()
+  returned null/blank - but empirically those methods returned the raw 12-character logical-terminal address (BIC8 + 1-char
+  terminal + 3-char branch) directly at least once, which is NOT a valid BICFIDec2014Identifier (8 or 11 chars only) and was
+  passed through unmodified since the null/blank check never triggered the truncation. Fixed with a shared normalizeToBicCore()
+  helper applied to the result regardless of which source (Prowide convenience method or manual block parsing) produced it
+  - truncates a 12+ char value to its 8-char BIC core, leaves 8/11-char values untouched, and leaves any other length alone
+  for XSD validation to reject rather than guessing at a fix. Confirms both getSender() and getReceiver() are real, callable
+  methods on this Prowide version (this error could only occur after they successfully returned a value and were fed into
+  the pipeline)."
+- "v1.14 CHANGELOG NOTE (ENGINE FIX, not a mapping-doc change): fixed 'cvc-minLength-valid: Value '' with length 0 is not
+  facet-valid with respect to minLength 1 for type Max34Text'. Root cause was in ConverterService, not this document: the
+  six account-portion llm_assisted entries (50A/50F/50K/59A/59/59F) each document 'no leading / line -> output nothing, this
+  is normal, not an error', but ConverterService's llm_assisted case unconditionally wrote whatever the LLM returned into
+  the tree - including a blank/empty result meant to signal 'no value' - creating an empty Othr/Id element that then failed
+  XSD minLength validation. Fixed to skip writing to the tree entirely when the llm_assisted result is null/blank, matching
+  how decompose_party already treats an unmatched optional sub-element. This was a latent bug in every llm_assisted entry
+  across any mapping doc, not specific to these six - simply hadn't been triggered by a 'legitimately no account line present'
+  test case until now."
+- "v1.13 CHANGELOG NOTE: fixed 'cvc-complex-type.2.4.b: The content of element Id is not complete. One of [IBAN, Othr] is
+  expected.' Root cause: CashAccount38/Id is AccountIdentification4Choice - a CHOICE between IBAN and Othr (GenericAccountIdentification1,
+  itself with its own Id/SchmeNm/Issr), never a plain text value directly under Id. All six account-portion entries (50A,
+  50F, 50K account entries -> DbtrAcct.Id; 59A, 59, 59F account entries -> CdtrAcct.Id) targeted '...Acct.Id' directly, which
+  is structurally invalid regardless of what the extracted value looks like. Retargeted all six to '...Acct.Id.Othr.Id' -
+  the generic identifier container, which accepts any identifier string (Max34Text) without requiring IBAN-format detection.
+  Deliberately NOT routed to IBAN even when a value happens to look like one: doing so correctly would need value-pattern
+  detection (a 'conditional-on-value' capability this engine doesn't have, distinct from the presence-based 'conditional'
+  transformation added earlier), and guessing IBAN vs Othr from shape alone risks miscategorizing a value the schema would
+  still accept under Othr - Othr/Id is a safe, universally-valid choice branch for any identifier, so no guess is needed here.
+  Same class of oversight as the DbtrAgt/CdtrAgt Othr/Id routing already used correctly for the 52D/57D entries (v1.9) - this
+  fix brings the six account entries in line with that existing precedent."
+- "v1.12 CHANGELOG NOTE: fixed 'cvc-complex-type.2.4.a: Invalid content...DbtrAcct...one of [...Dbtr] is expected'. Root cause:
+  Dbtr/Cdtr are mandatory pacs.008 elements, but this document only ever populates them via the 50A/59A BIC entries - for
+  50F/50K/bare-50/bare-59/59F input (no BIC), Dbtr/Cdtr were never created AT ALL, while DbtrAcct/CdtrAcct (populated separately
+  by those same field options) still were - producing DbtrAcct with no preceding Dbtr sibling, an XSD sequence violation.
+  Fixed with new target_defaults entries (empty CdtTrfTxInf.Dbtr/Cdtr, applied only when nothing under that path was populated
+  by any other entry) - see target_defaults section. Required a safety fix to ConverterService's target_defaults application:
+  it previously checked only the EXACT target_path key, which would have let a container-placeholder default clobber a Dbtr/Cdtr
+  that 50A/59A DID populate (MxRenderer's setTextContent on the container element would wipe out children already appended)
+  - now checks the whole subtree before applying a default."
+- "v1.11 CHANGELOG NOTE: fixed 'cvc-complex-type.4: Attribute Ccy must appear on element IntrBkSttlmAmt'. Root cause was two-fold:
+  (1) MxRenderer had NO mechanism to emit XML attributes at all - only child elements/text - even though every ISO 20022 currency-and-amount
+  type (ActiveCurrencyAndAmount for IntrBkSttlmAmt, ActiveOrHistoricCurrencyAndAmount for InstdAmt) has a MANDATORY Ccy attribute,
+  not a child element; (2) the 32A/33B amount entries used a single llm_assisted call targeting the amount element directly,
+  which can only ever produce ONE value at ONE target_path - structurally incapable of also populating an attribute. Fixed
+  generically: MxRenderer now supports a 'Foo.Bar.@AttrName' target_path convention (sets an XML attribute instead of a child
+  element), and the 32A/33B amount entries were each split into two deterministic entries (currency via extract_pattern+direct_copy+allowed_pattern,
+  amount via extract_pattern+decimal_comma_to_dot) instead of one combined llm_assisted call - removing an LLM dependency
+  for what was already documented as purely deterministic fixed-width extraction, consistent with this engine's own stated
+  preference for exact operations over LLM calls. SEPARATELY, also fixed field 36 (XchgRate): its notes incorrectly claimed
+  no comma-to-dot transformation type existed and used direct_copy, silently passing a comma-decimal value through unconverted
+  into a plain xs:decimal target - decimal_comma_to_dot already existed and is used elsewhere in this document; this would
+  have failed XSD validation the first time a message carried field 36, not yet triggered only because no test message had
+  exercised it."
+- "v1.9 CHANGELOG NOTE: added DbtrAgt (52A/52D, with an explicit Sender-BIC-from-MT-header fallback per user instruction 2026-08-28)
+  and CdtrAgt option D (57D) alongside the existing 57A. Required a new engine capability: 'conditional' transformation entries
+  can now reference another field's raw value per branch (if_any_present_field/if_none_present_field) and can explicitly skip
+  a branch (skip_if_any_present/skip_if_none_present) when a different entry already covers it - see TransformationEngine.conditional().
+  Also required MtParserService to read the MT header's Block 1 (Sender BIC) for the first time - previously only Block 4
+  was read at all, same class of gap already flagged for Block 3/UETR (field 121). CdtrAgt deliberately has NO fallback when
+  57A/57D are both absent, per explicit user instruction not to invent one from the header - that case now fails conversion
+  with a clear, documented error rather than guessing or emitting invalid XSD. See the updated 52A/52D/57A/57D entries and
+  the CdtrAgtRequiredCheck entry for the exact rules. SEPARATELY, also wired in the new top-level 'target_defaults' mechanism
+  (target_path -> value, applied only if still absent after all field_mappings entries ran) for CdtTrfTxInf/PmtId/EndToEndId
+  - UHB p.209's 'NOTPROVIDED' default was already cited in this document's notes but never actually applied, so any message
+  where field 70 lacked a /ROC/ prefix silently produced an invalid (missing) mandatory EndToEndId. ALSO FOUND while writing
+  the 52D/57D entries above: DecompositionRule.stripAccountLinePrefix/accountLinePattern/accountSubElement were extensively
+  documented (see that class's own Javadoc) but DecompositionService never actually read them - dead code, never exercised
+  by any pre-v1.9 entry (all of which work around the same shape with a single whole-value regex instead, e.g. the 50A/59A
+  BIC entries). Implemented for real in DecompositionService rather than working around it a third time, since it is the mechanism
+  the schema's own documentation describes as the correct one for this exact 'optional /account line, then name/address lines'
+  shape."
+- "v1.7 CHANGELOG NOTE: v1.4's fix was documentation-only (added prose to decompose_party's pattern_description/edge_cases
+  explaining that a non-match against an optional account-line sub-element should not raise). It did not work - the identical
+  error class recurred against the same test value ('JOHN DOE 123 MAIN STREET', field 50K) with near-identical wording, confirming
+  the engine does not read that prose and mechanically applies decompose_party's fallback_if_unparseable, which this schema
+  itself documents as hard-locked to raise_error with 'no other fallback implemented.' No prose fix could have worked - the
+  transformation type itself has no mechanism for optional sub-elements. STRUCTURAL FIX: moved the six account-only entries
+  (50A-account, 50F, 50K, 59A-account, 59, 59F) from decompose_party to llm_assisted, which has no fallback_if_unparseable
+  field to trigger. Each entry's decision procedure explicitly instructs 'output nothing if no account line is present, this
+  is not an error.' The 59A-BIC and 50A-BIC entries (which extract a BIC, not an account) were left on decompose_party since
+  their regex already contains an optional group designed to match with or without an account line present - but this is flagged
+  as unverified against the actual engine, not confirmed safe, in case the same failure mode applies to them too."
+- "v1.6 CHANGELOG NOTE: v1.5's fix added a new top-level field 'character_set_scope', which failed schema validation - the
+  consuming class (com.wiredesk.mtmx.mapping.model.MappingDocument) is strict (fails on unrecognized properties) and only
+  accepts the 12 fields already in this schema. Moved the same clarification into scope_notes instead, which is free text
+  and already a valid field. No new top-level fields exist in this document as of v1.6 - only the original 12."
+- "v1.5 CHANGELOG NOTE: a real conversion run (sample MT103 with 20/23B/32A/50K/59/71A) correctly produced '<IntrBkSttlmAmt
+  Ccy=\"USD\">1234.56</IntrBkSttlmAmt>' from source '32A:240115USD1234,56' (comma-to-dot conversion worked as designed), but
+  validation then rejected that OUTPUT for containing '\", <, =, >' - characters outside SWIFT-X. This is a validator scope
+  bug, not a mapping error: SWIFT-X governs the MT103 source side only; it was never a valid constraint for serialized XML,
+  which structurally requires those characters. See the CHARACTER_SET SCOPE note in scope_notes (moved there in v1.6 after
+  the original fix failed schema validation). No field_mappings entries were changed - the 32A transformation that produced
+  the flagged output was correct."
+- "v1.4 CHANGELOG NOTE: a production run against a real 50K value ('JOHN DOE 123 MAIN STREET', no account line) incorrectly
+  raised fallback_if_unparseable. Root cause: the account-line entries (50A-account, 50F, 50K, 59A-account, 59, 59F) all use
+  an optional sub-element (AccountId, matched only when a leading '/' line is present) but fallback_if_unparseable was apparently
+  triggering on any regex non-match, not just genuine malformation. Since the account line is optional in every one of these
+  MT103 field options, plain name/address content with no leading slash is the COMMON case, not an edge case - tightened all
+  six entries' pattern_description and edge_cases to explicitly state that a non-match means 'no account present' and must
+  not raise. This is a correction to documentation clarity for an existing rule, not a new source citation or a change in
+  what's actually mapped."
+- "M/O status: no MT103 FIN spec attached, so no field's mandatory flag can be certified - all set to false with a note, including
+  20/32A/71A which are almost certainly mandatory in reality."
+- "23E Instruction Code: unresolved. NOT MAPPED in the MT103-to-pacs.004 and MT104-to-pacs.003 tables. The MT101-to-pacs.008
+  table (different message type) does NOT flag it NOT MAPPED and places it near Category Purpose/Instruction For Creditor
+  Agent, but that's not a valid MT103 citation. No field_mappings entry."
+- "26T Transaction Type Code: no evidence for MT103-to-pacs.008 in any attached document. NOT MAPPED in MT104-to-pacs.003
+  (different pair); absent from the MT101-to-pacs.008 table entirely. No field_mappings entry."
+- "51A Sending Institution: no evidence found either way in any attached document."
+- "77B Regulatory Reporting: no UHB citation, but real sample evidence exists - comparing pacs.008 samples TRAK (has Cdtr/CtryOfRes=US)
+  vs TROK (doesn't), only TRAK's translated MT contains ':77B:/BENEFRES/US'. Genuine same-pair evidence, but reverse-direction,
+  and only the Creditor-side (/BENEFRES/) half was observed - the Debtor-side (/ORDERRES/) equivalent is inferred by symmetry
+  only, and the full RgltryRptg structure beyond the codeword is unevidenced. Excluded from field_mappings; candidate for
+  a follow-up once forward-direction samples exist."
+- "Decimal reformatting (MT comma -> XML dot): CORRECTED in v1.11 - this note (and the 36/XchgRate entry that acted on it)
+  previously claimed no matching transformation type existed in this schema's enum. That was wrong: decimal_comma_to_dot has
+  existed in TransformationEngine all along. All amount-bearing entries (32A, 33B, 36) now use it via extract_pattern + decimal_comma_to_dot
+  rather than direct_copy or llm_assisted."
+- "pacs.008 STP variant, AppHdr/head.001 fields: out of scope - see scope_notes."
+- "ClrSysRef and TxId (PmtId): confirmed no MT103 source. Evidence: engine diagnostic logs in inflow_translation_sample_messages_2025Q3
+  explicitly show both being dropped as unmapped input. No field_mappings entry (nothing to map FROM in this direction)."
+- "EndToEndId default 'NOTPROVIDED': UHB p.209 states this literal default when the Debtor supplies none, confirmed in real
+  samples. RESOLVED in v1.9 - wired into the new target_defaults mechanism (see that section and the v1.9 changelog note)
+  rather than left as an open judgment call; this was a mandatory pacs.008 element that was previously silently missing whenever
+  field 70 lacked a /ROC/ prefix."
+- Swift publishes the authoritative current MT103<->pacs.008 translation rules in MyStandards / the Translation Portal. 
+  Public Swift pages confirm the translation scope but do not expose every field-level rule; those portal-only rules are
+  not fabricated here.
+- 23B -> PmtTpInf/LclInstrm/Prtry is retained as corroborated mapping, but is not marked direct Swift-portal-certified 
+  because the current portal rule was not publicly retrievable in this review.
+- 50F/59F numbered customer data requires a dedicated deterministic structured-address parser. Account extraction alone 
+  is not a complete business mapping.
+- 71F/71G require a structured ChargesInformation builder because the pacs.008.001.08 XSD requires both Amount and 
+  Agent. Raw text-to-ChrgsInf is prohibited.
+- 52B/52C, 53B/53D, 54B/54D, 55B/55D, 56C/56D, and 57B/57C are not silently guessed. The current mapping must fail 
+  closed for unsupported variants until the exact CBPR+ translation rule and clearing-system mapping are implemented.
+- Field 77B (ORDERRES/BENEFRES) and 26T have current CBPR+ implementation evidence, but exact target-side 
+  codeword/occurrence handling should be added only after the engine supports the required repeated structured elements 
+  and the current Swift translation rule is verified.
+- SettlementMethod cannot be universally inferred from MT103 presence/absence alone. The current conditional rule is an 
+  implementation default and must be verified against the Swift Translation Portal and corridor settlement configuration
+  before production.
+- "v2.1 VERIFIED CITATIONS: the official Swift MT103 Standards Category 1 field definitions state, for field 52a (Ordering
+  Institution), that it 'Specifies the Financial Institution of the Ordering Customer, when different from the Sender' -
+  i.e. absence of 52a means the Sender is the ordering institution; and for field 57a (Account With Institution), that
+  'When field 57a is not present, it means that the Receiver is also the account with institution.' Both are universal
+  Swift FIN usage rules on the MT103 source side, independent of the MX target profile (CBPR+, TARGET2, or otherwise), and
+  are the corrected basis for the __MT_SENDER_BIC__ and __MT_RECEIVER_BIC__ fallback entries above - superseding the v2.0
+  entries' unsourced 'user-provided rule' framing and the __MT_RECEIVER_BIC__ entry's incorrect TARGET2 citation."
+unmapped_fields_policy: error
+
+default_values: {}
+
+target_defaults:
+  CdtTrfTxInf.PmtId.EndToEndId: NOTPROVIDED
+validation_rules:
+- rule_id: VR001
+  description: "If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange
+    Rate must be present."
+  applies_to: ["CdtTrfTxInf.InstdAmt", "CdtTrfTxInf.IntrBkSttlmAmt", "CdtTrfTxInf.XchgRate"]
+  severity: error
+  rule_type: conditional_currency_mismatch_requires
+  params:
+    trigger_field: CdtTrfTxInf.InstdAmt
+    compare_field: CdtTrfTxInf.IntrBkSttlmAmt
+    required_field: CdtTrfTxInf.XchgRate
+  logic: >
+    UHB p.214, verbatim: "if the Instructed Amount is present and the
+    currency is different from the currency in Interbank Settlement
+    Amount, then Exchange Rate must be present." v2.2 CHANGELOG: now
+    machine-checked via rule_type - see ValidatorService.evalCurrencyMismatchRequires().
+
+- rule_id: VR002
+  description: "When Charge Bearer = DEBT, only one pre-paid Charges Information occurrence is valid; deducted charges are
+    invalid."
+  applies_to: ["CdtTrfTxInf.ChrgBr", "CdtTrfTxInf.ChrgsInf"]
+  severity: error
+  logic: >
+    UHB p.216. NOT machine-checked, deliberately: ChrgsInf's own
+    field_mappings entries (71F/71G) use transformation=skip_with_warning
+    (see those entries' v1.19 notes) - this engine cannot currently
+    populate ChrgsInf at all, structured or otherwise, so there is no
+    "pre-paid vs deducted occurrence" state in the converted output to
+    check a rule about. Recorded for human/LLM reviewer judgement until
+    ChrgsInf gains real support.
+
+- rule_id: VR003
+  description: "Reimbursement Agent elements are only relevant/expected when Settlement Method = COVE."
+  applies_to: ["GrpHdr.SttlmInf.SttlmMtd", "GrpHdr.SttlmInf.InstgRmbrsmntAgt", "GrpHdr.SttlmInf.InstdRmbrsmntAgt", "GrpHdr.SttlmInf.ThrdRmbrsmntAgt"]
+  severity: warning
+  rule_type: presence_requires_value
+  params:
+    trigger_fields: ["GrpHdr.SttlmInf.InstgRmbrsmntAgt", "GrpHdr.SttlmInf.InstdRmbrsmntAgt", "GrpHdr.SttlmInf.ThrdRmbrsmntAgt"]
+    gate_field: GrpHdr.SttlmInf.SttlmMtd
+    gate_value: COVE
+  logic: >
+    UHB pp.199-207. Not a stated hard-rejection rule outside COVE, so
+    severity=warning. v2.2 CHANGELOG: now machine-checked via rule_type -
+    see ValidatorService.evalPresenceRequiresValue().
+
+- rule_id: VR004
+  description: "If all three Previous Instructing Agents are populated, Intermediary Agent should not also be used in the
+    same message."
+  applies_to: ["CdtTrfTxInf.PrvsInstgAgt1", "CdtTrfTxInf.PrvsInstgAgt2", "CdtTrfTxInf.PrvsInstgAgt3", "CdtTrfTxInf.IntrmyAgt1"]
+  severity: warning
+  rule_type: mutual_exclusion
+  params:
+    requires_all: ["CdtTrfTxInf.PrvsInstgAgt1", "CdtTrfTxInf.PrvsInstgAgt2", "CdtTrfTxInf.PrvsInstgAgt3"]
+    excludes: CdtTrfTxInf.IntrmyAgt1
+  logic: >
+    UHB p.225: implies a direct-and-cover message pair would be needed
+    instead. v2.2 CHANGELOG: now machine-checked via rule_type - see
+    ValidatorService.evalMutualExclusion().
+
+- rule_id: VR005
+  description: 'MT103 mandatory source alternatives must be present: exactly one Ordering Customer option (50A/50F/50K), exactly
+    one Beneficiary Customer option (59/59A/59F), plus 20, 23B, 32A and 71A.'
+  applies_to:
+  - '20'
+  - 23B
+  - 32A
+  - 50A
+  - 50F
+  - 50K
+  - '59'
+  - 59A
+  - 59F
+  - 71A
+  severity: error
+  rule_type: source_alternative_group_required
+  params:
+    alternative_groups:
+      - ['50A', '50F', '50K']
+      - ['59', '59A', '59F']
+    required_source_fields: ['20', '23B', '32A', '71A']
+  logic: >
+    SWIFT MT103 field presence rule must be enforced as an
+    alternative-group validation; do not rely on empty XML placeholders.
+    v2.2 CHANGELOG: now machine-checked via rule_type - checked against
+    the SOURCE message (parsedFields), not the converted tree - see
+    ValidatorService.evalSourceAlternativeGroup().
+- rule_id: VR006
+  description: Do not emit empty Dbtr or Cdtr elements as a fallback. If the source mandatory customer option is absent
+    or cannot be parsed, reject conversion.
+  applies_to:
+  - CdtTrfTxInf.Dbtr
+  - CdtTrfTxInf.Cdtr
+  severity: error
+  logic: >
+    Business-mandatory customer data must be present; XSD structural
+    validity alone is insufficient. NOT a separate machine-checked
+    rule_type - already naturally enforced by two other mechanisms
+    working together: (1) target_defaults has no empty Dbtr/Cdtr
+    placeholder (removed for exactly this reason, see that section's
+    v1.12/v2.1 history), so Dbtr/Cdtr are only ever populated by a REAL
+    field_mappings entry firing; (2) the schema completeness check
+    (XsdOrderingIndex.findMissingMandatory, v2.2) then fails the
+    conversion outright if Dbtr/Cdtr end up missing entirely. Adding a
+    third, redundant rule_type here would just duplicate that enforcement.
+- rule_id: VR007
+  description: 'Currency-aware amount precision: do not round or truncate amounts; validate fractional digits against the
+    currency rules used by the target profile.'
+  applies_to:
+  - CdtTrfTxInf.IntrBkSttlmAmt
+  - CdtTrfTxInf.InstdAmt
+  severity: error
+  rule_type: currency_precision_check
+  params:
+    amount_fields: ['CdtTrfTxInf.IntrBkSttlmAmt', 'CdtTrfTxInf.InstdAmt']
+  logic: >
+    ISO amount datatypes permit more fractional digits than many
+    currencies; the converter must enforce currency-specific minor-unit
+    precision (standard ISO 4217 exceptions - JPY/KRW/etc.=0 decimals,
+    BHD/KWD/etc.=3 decimals, default 2). ChrgsInf removed from applies_to
+    (was listed originally) - it's never populated by this document's
+    field_mappings (see VR002's note), so there is nothing for this rule
+    to check there. v2.2 CHANGELOG: now machine-checked via rule_type -
+    see ValidatorService.evalCurrencyPrecision(). Only flags TOO MANY
+    fractional digits, not fewer-than-standard (a round amount like "100"
+    for USD is legitimate).
+- rule_id: VR008
+  description: 'If 50F/59F or any D-option agent address is converted after 14 November 2026 for an in-scope Swift cross-border
+    flow, hybrid/structured address requirements must be satisfied: Town Name and Country Code must be structured.'
+  applies_to:
+  - CdtTrfTxInf.Dbtr.PstlAdr
+  - CdtTrfTxInf.Cdtr.PstlAdr
+  - CdtTrfTxInf.DbtrAgt.FinInstnId.PstlAdr
+  - CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr
+  severity: error
+  rule_type: structured_address_required
+  params:
+    address_fields:
+      - CdtTrfTxInf.Dbtr.PstlAdr
+      - CdtTrfTxInf.Cdtr.PstlAdr
+      - CdtTrfTxInf.DbtrAgt.FinInstnId.PstlAdr
+      - CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr
+    effective_date: "2026-11-14"
+  logic: >
+    Swift SR2026 address requirement; do not infer Town/Country from free
+    text without an explicit deterministic structuring rule. v2.2
+    CHANGELOG: now machine-checked via rule_type - flags a PstlAdr
+    populated with free-text AdrLine but no structured TwnNm/Ctry; does
+    NOT attempt to derive TwnNm/Ctry itself (still requires a real
+    structuring rule once one is sourced) - see
+    ValidatorService.evalStructuredAddress(). v2.4 BUG FIX: this rule's
+    own description says "if converted after 14 November 2026" - the
+    v2.2 implementation ignored that and enforced it unconditionally,
+    incorrectly failing conversions run months before its own stated
+    effective date. Added effective_date (ISO date) to params -
+    evalStructuredAddress() now skips the check entirely (not even a
+    warning - it isn't in effect yet) until the current date reaches it.
+character_set: SWIFT-X
