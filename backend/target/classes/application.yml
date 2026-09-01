@@ -1,0 +1,35 @@
+# Load local backend/.env when running from the backend directory.
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: mtmx-converter
+  # Applying SNAKE_CASE globally means every Java POJO (camelCase fields)
+  # serializes/deserializes as snake_case JSON automatically - which is
+  # exactly the wire format the existing frontend already expects
+  # (raw_text, source_format, rendered_output, field_trace, etc.) without
+  # needing @JsonProperty annotations scattered everywhere.
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+# Server runs on 8000 by default specifically so the existing React
+# frontend (VITE_API_BASE_URL default = http://localhost:8000) keeps
+# working unmodified, per "keep the frontend as is".
+server:
+  port: ${SERVER_PORT:8000}
+
+mtmx:
+  # Folder containing one mapping-doc YAML file per conversion direction.
+  mappings-dir: ${MTMX_MAPPINGS_DIR:./mappings}
+  # Optional folder of official ISO 20022 .xsd files, named <target_format>.xsd
+  xsd-dir: ${MTMX_XSD_DIR:}
+  provider: ${MTMX_PROVIDER:gemini}
+  model-name: ${MTMX_MODEL:openai/gpt-oss-20b}
+  max-tokens: 1536
+  max-converter-retries: 2
+  gemini-api-key: ${GEMINI_API_KEY:}
+  groq-api-key: ${GROQ_API_KEY:}
+
+logging:
+  level:
+    com.wiredesk.mtmx: INFO
