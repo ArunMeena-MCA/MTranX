@@ -7,6 +7,8 @@ import com.prowidesoftware.swift.model.Tag;
 import com.wiredesk.mtmx.exception.ParsingException;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * Parses SWIFT MT messages using Prowide Core (com.prowidesoftware:pw-swift-core)
  * instead of hand-rolled regex.
@@ -28,6 +30,19 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class MtParserService {
+
+    /**
+     * MT202COV Sequence B tags that reuse a letter/option also present in
+     * Sequence A (or that are only ever meaningful within Sequence B in
+     * the first place) - mirrored into "&lt;tag&gt;_seqB" synthetic keys
+     * ONLY when Block 3 field 119 signals COV, so the MT202_TO_PACS009
+     * mapping doc's Sequence B entries can read a key that a plain MT202
+     * never produces. See the mirroring block in {@link #parse} for the
+     * full rationale and its known residual limitation.
+     */
+    private static final List<String> SEQUENCE_B_MIRROR_TAGS = List.of(
+            "50A", "50K", "50F", "52A", "52D", "56A", "56D",
+            "57A", "57B", "57C", "57D", "59", "59A", "59F", "70", "33B");
 
     public ParsedMessage parse(String rawText, String declaredFormat) {
         SwiftMessage message;
@@ -96,6 +111,40 @@ public class MtParserService {
         }
         if (covFlag) {
             parsed.addField("COV_FLAG", "COV");
+        }
+
+        // Sequence B mirror (v1.3 gap fix) - MT202COV's Sequence B reuses
+        // several of the SAME literal tag names as Sequence A (52a, 56a,
+        // 57a) and Prowide's flat block4 tag list gives no way to tell
+        // "this 52A is Sequence A's" from "this 52A is Sequence B's" by
+        // tag name alone - see the MT202_TO_PACS00900108.yaml mapping
+        // doc's own known_limitations for the full architectural
+        // discussion. Confirmed via live testing (2026-09-01) that this
+        // was actively breaking ordinary CORE MT202 conversions: a plain
+        // message with a 52A would ALSO populate the mapping doc's
+        // Sequence B entries (which read the same bare "52A" key), which
+        // then correctly got rejected by that doc's own VR-202-05 - a
+        // valid CORE message failing to convert at all.
+        //
+        // This does NOT solve the deeper problem (a genuine MT202COV that
+        // carries a duplicate tag/option letter in BOTH sequences would
+        // still have its two raw values newline-joined under one key by
+        // ParsedMessage.addField, and this mirror would copy that same
+        // joined value into the "_seqB" field too) - that requires real
+        // Sequence A/B boundary detection, which this fix deliberately
+        // does not attempt. What it DOES fix: Sequence B's own
+        // field_mappings entries can be pointed at these "<tag>_seqB"
+        // keys instead of the bare tag name, so they are populated ONLY
+        // for messages that actually declared themselves as COV (field
+        // 119 = "COV"), never for a plain MT202 that merely happens to
+        // reuse the same tag letter.
+        if (covFlag) {
+            for (String seqBTag : SEQUENCE_B_MIRROR_TAGS) {
+                String rawValue = parsed.getFields().get(seqBTag);
+                if (rawValue != null) {
+                    parsed.addField(seqBTag + "_seqB", rawValue);
+                }
+            }
         }
 
         // Block 1 (basic header), not block 4 - exposed as a synthetic

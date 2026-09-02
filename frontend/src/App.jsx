@@ -4,6 +4,7 @@ import PipelineStatus from "./components/PipelineStatus.jsx";
 import DiagnosticsPanel from "./components/DiagnosticsPanel.jsx";
 import { fetchMappings, convertMessage } from "./lib/api.js";
 import { SAMPLE_MT103 } from "./lib/samples.js";
+import { detectSourceFormat } from "./lib/detectFormat.js";
 
 const FALLBACK_MAPPINGS = [
   { conversion_id: "MT103_TO_PACS008", source_format: "MT103", target_format: "pacs.008.001.08" },
@@ -79,6 +80,21 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleConvert]);
 
+  const handleRawTextChange = useCallback(
+    (text) => {
+      setRawText(text);
+      const detected = detectSourceFormat(text);
+      // Only auto-select a format the backend's mapping docs actually
+      // support (sourceOptions) - never set the dropdown to a value with
+      // no matching <option>, and never override with a no-op when it's
+      // already correct.
+      if (detected && detected !== sourceFormat && sourceOptions.includes(detected)) {
+        setSourceFormat(detected);
+      }
+    },
+    [sourceFormat, sourceOptions]
+  );
+
   const handleCopy = () => {
     if (result?.rendered_output) {
       navigator.clipboard.writeText(result.rendered_output);
@@ -123,7 +139,7 @@ export default function App() {
         <div className="flex-1" />
 
         <button
-          onClick={() => setRawText(SAMPLE_MT103)}
+          onClick={() => handleRawTextChange(SAMPLE_MT103)}
           className="text-[11px] uppercase tracking-widest2 text-ledger-inkDim hover:text-ledger-accent transition-colors"
         >
           Load sample
@@ -150,7 +166,7 @@ export default function App() {
           eyebrow="Source message"
           formatBadge={sourceFormat}
           value={rawText}
-          onChange={setRawText}
+          onChange={handleRawTextChange}
           placeholder={"Paste a raw MT or MX message here…\n\n(Cmd/Ctrl + Enter to convert)"}
         />
         <MessagePanel

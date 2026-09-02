@@ -1,10 +1,26 @@
 conversion_id: "MT202_TO_PACS009"
 source_format: "MT202"
 target_format: "pacs.009.001.08"
-version: "1.1"
-last_updated: "2026-08-31"
+version: "1.4"
+last_updated: "2026-09-01"
 
 scope_notes: >
+  SUPERSEDED DECISION HISTORY - SttlmMtd (v1.2 -> v1.3, 2026-09-01): v1.2 removed all SttlmMtd derivation and made it
+  fail-closed, on the conclusion that SttlmMtd could not be derived from MT202 content at all. On the user's explicit
+  direction to specifically re-check this document's OWN primary worked-example source (the Bank of America SWIFT
+  Reference Guide, already in sources_consulted) for a 53a/54a-driven rule, two real worked examples were found (not
+  inference - see the GENERATED:SttlmMtd field_mappings entry for the full citation): 53a PRESENT (":53B:/BOFA-
+  ACCT-1234") resolves to INDA, and 53a/54a BOTH ABSENT (the complete worked MT202COV example in that same guide)
+  ALSO resolves to INDA. v1.3 therefore reinstates a GENERATED:SttlmMtd entry - transformation: constant, value
+  "INDA" - grounded in those two cited examples, not in the field-definition-only inference v1.1's removed rule had
+  relied on. This is NOT a reversal of the "never invent" principle: it is the same principle correctly applied once
+  real primary-source worked examples were actually found, rather than settling for "we couldn't find one." The
+  residual gap this does NOT close: no worked example in any of the three authoritative sources reviewed (this Bank
+  of America guide, Standard Chartered's CBPR+ pacs.009 guide, BNY's pacs.009 deep dive) demonstrates any scenario
+  resolving to INGA, COVE, or CLRG - see known_limitations. A future correction to this entry (e.g. adding a genuine
+  INGA-triggering condition) requires an equally concrete cited worked example, not inference from field
+  definitions alone - the same bar this correction was held to.
+
   ENGINE COMPATIBILITY (v1.1): the original v1.0 document used target_message/target_root/source_messages instead of
   the engine's required conversion_id/source_format/target_format top-level keys - CompletenessAuditor requires the
   latter (REQUIRED_TOP_LEVEL_KEYS) and would have rejected this entire document before a single field_mappings entry
@@ -113,28 +129,37 @@ field_mappings:
 
 - source_field: "__MT_SENDER_BIC__"
   source_name: "MT header Block 1 Logical Terminal Address (Sender)"
-  target_path: "FICdtTrf.CdtTrfTxInf.InstgAgt"
+  target_path: "CdtTrfTxInf.InstgAgt.FinInstnId.BICFI"
   mandatory: true
   transformation: direct_copy
   notes: >-
-    The Sender of the MT202/MT202COV message maps to InstgAgt (Instructing Agent) at the outer CdtTrfTxInf level. This is
-    a straightforward, universal mapping: the Sender of any FIN message IS, by definition, the instructing side of that
-    message - it is not a fallback-only value the way __MT_SENDER_BIC__ is for MT103's DbtrAgt. Confirmed against the
-    worked CBPR+ MT202COV -> pacs.009 COV example consulted for this document (Sender HYVEDEMMXXX -> InstgAgt HYVEDEMMXXX).
-    __MT_SENDER_BIC__ is a synthetic field populated from the MT header's Block 1 Logical Terminal Address, truncated to
-    the 8-character core BIC (see the companion MT103 document's identical note on this truncation).
+    ENGINE FIX (v1.1): target_path was the bare container "CdtTrfTxInf.InstgAgt", which MxRenderer would render as
+    <InstgAgt>DEUTDEFFXXX</InstgAgt> - flat text content. InstgAgt is type BranchAndFinancialInstitutionIdentification6
+    (confirmed directly against the XSD, same complex type as IntrmyAgt1/2/3 elsewhere in this document), an
+    element-only content type with no text content allowed at all - hence
+    cvc-complex-type.2.3 ('InstgAgt cannot have character children'). Fixed by appending the required
+    .FinInstnId.BICFI path, the same nesting already used correctly for every other BIC-bearing agent element in this
+    document. The Sender of the MT202/MT202COV message maps to InstgAgt (Instructing Agent) at the outer CdtTrfTxInf
+    level. This is a straightforward, universal mapping: the Sender of any FIN message IS, by definition, the
+    instructing side of that message - it is not a fallback-only value the way __MT_SENDER_BIC__ is for MT103's
+    DbtrAgt. Confirmed against the worked CBPR+ MT202COV -> pacs.009 COV example consulted for this document (Sender
+    HYVEDEMMXXX -> InstgAgt HYVEDEMMXXX). __MT_SENDER_BIC__ is a synthetic field populated from the MT header's Block 1
+    Logical Terminal Address, truncated to the 8-character core BIC (see the companion MT103 document's identical note
+    on this truncation).
   edge_cases:
   - condition: "Sender cannot be determined from the message header"
     handling: "reject - InstgAgt has no other source in this mapping"
 
 - source_field: "__MT_RECEIVER_BIC__"
   source_name: "MT header Block 2 Application Header (Receiver)"
-  target_path: "FICdtTrf.CdtTrfTxInf.InstdAgt"
+  target_path: "CdtTrfTxInf.InstdAgt.FinInstnId.BICFI"
   mandatory: true
   transformation: direct_copy
   notes: >-
-    The Receiver of the MT202/MT202COV message maps to InstdAgt (Instructed Agent) at the outer CdtTrfTxInf level, for the
-    same universal reasoning as the Sender->InstgAgt mapping above - confirmed against the same worked example (Receiver
+    ENGINE FIX (v1.1): same fix as the InstgAgt entry above - InstdAgt is the same
+    BranchAndFinancialInstitutionIdentification6 complex type, element-only, no bare text content allowed. The Receiver
+    of the MT202/MT202COV message maps to InstdAgt (Instructed Agent) at the outer CdtTrfTxInf level, for the same
+    universal reasoning as the Sender->InstgAgt mapping above - confirmed against the same worked example (Receiver
     BOFADEFXXXX -> InstdAgt BOFADEFXXXX). __MT_RECEIVER_BIC__ is a synthetic field populated from the MT header's Block 2
     Receiver address, truncated to the 8-character core BIC (see companion MT103 document for the identical mechanism).
   edge_cases:
@@ -143,7 +168,7 @@ field_mappings:
 
 - source_field: "121"
   source_name: "UETR (User Header Block 3, field 121)"
-  target_path: "FICdtTrf.CdtTrfTxInf.PmtId.UETR"
+  target_path: "CdtTrfTxInf.PmtId.UETR"
   mandatory: true
   transformation: direct_copy
   allowed_pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -159,25 +184,33 @@ field_mappings:
   - condition: "Present but does not match the UUIDv4 pattern"
     handling: "reject - do not silently coerce or truncate"
 
-- source_field: "GENERATED:MsgId"
-  source_name: "Message Identification (no direct MT202 tag; derived from field 20)"
-  target_path: "FICdtTrf.GrpHdr.MsgId"
+- source_field: "20"
+  source_name: "Sender's Reference (reused for Message Identification)"
+  target_path: "GrpHdr.MsgId"
   mandatory: true
   transformation: direct_copy
   notes: >-
-    Per the authoritative CBPR+ MT202->pacs.009 reference mapping consulted for this document, field 20 (Sender's
-    Reference / Transaction Reference Number) populates BOTH GrpHdr/MsgId and CdtTrfTxInf/PmtId/InstrId with the identical
-    value - confirmed by the worked example (field 20 "FTT6765850246" -> both MsgId and InstrId equal "FTT6765850246").
-    This is a deliberate dual-write, not a duplicate-mapping bug: MsgId and InstrId serve different purposes at different
-    structural levels (message-level identifier vs. instruction-level identifier) even though this translation populates
-    both from the same MT source value, per the cited reference. See the field 20 entry below for the InstrId write.
+    ENGINE FIX (v1.1): this entry's source_field was originally the literal string "GENERATED:MsgId" - not a real SWIFT
+    tag, and MtParserService never produces a parsed field with that name, so this entry could NEVER resolve a value and
+    would fail every single conversion (mandatory, no default_values fallback) regardless of input. The label
+    "GENERATED:" only makes sense together with transformation: generated (which IS special-cased in ConverterService to
+    run before any source-field lookup, e.g. the GENERATED:NbOfTxs/CreDtTm entries below) - it was never valid alongside
+    transformation: direct_copy, which always looks up its OWN source_field literally. Fixed by pointing this entry at
+    the real field it was always meant to copy: per the authoritative CBPR+ MT202->pacs.009 reference mapping consulted
+    for this document, field 20 (Sender's Reference / Transaction Reference Number) populates BOTH GrpHdr/MsgId and
+    CdtTrfTxInf/PmtId/InstrId with the identical value - confirmed by the worked example (field 20 "FTT6765850246" ->
+    both MsgId and InstrId equal "FTT6765850246"). This is a deliberate dual-write, not a duplicate-mapping bug: MsgId
+    and InstrId serve different purposes at different structural levels even though both are populated from the same MT
+    source value. See the other "20" entry below for the InstrId write - the same source_field appearing twice, each
+    routed to a different target_path, is the same established pattern already used for 13C/72/32A elsewhere in this
+    document.
   edge_cases:
   - condition: "Field 20 absent"
     handling: "reject - field 20 is mandatory in MT202/MT202COV Sequence A"
 
 - source_field: "GENERATED:NbOfTxs"
   source_name: "Number of Transactions (no MT202 equivalent; always 1 for this message type)"
-  target_path: "FICdtTrf.GrpHdr.NbOfTxs"
+  target_path: "GrpHdr.NbOfTxs"
   mandatory: true
   transformation: constant
   constant_value: "1"
@@ -188,13 +221,20 @@ field_mappings:
 
 - source_field: "GENERATED:CreDtTm"
   source_name: "Creation Date/Time (no MT202 equivalent; set at translation time)"
-  target_path: "FICdtTrf.GrpHdr.CreDtTm"
+  target_path: "GrpHdr.CreDtTm"
   mandatory: true
-  transformation: llm_assisted
+  transformation: generated
+  generator: timestamp
   notes: >-
-    No MT202 field carries this value (confirmed "No equivalent in MT" by the reference mapping); it is the actual
-    date/time the conversion is performed, in ISO 8601 (YYYY-MM-DDThh:mm:ss, with UTC offset). This is an engine-generated
-    timestamp, not extracted from message content - do not attempt to derive it from field 32A's value date, which is a
+    ENGINE FIX (v1.1): was transformation: llm_assisted, which is NOT special-cased in ConverterService - it still looks
+    up this entry's OWN source_field ("GENERATED:CreDtTm", which MtParserService never produces) before ever reaching the
+    LLM call, so this would have failed exactly like the GENERATED:MsgId bug above (just not yet observed, since MsgId's
+    entry appears earlier in field_mappings and aborts the conversion first). transformation: generated IS special-cased
+    to run unconditionally before any source-field lookup - the correct mechanism for a value with no MT202 source at
+    all, matching the companion MT103 document's own proven GENERATED:CreDtTm entry exactly (transformation: generated,
+    generator: timestamp -> TransformationEngine.generate() returns Instant.now(), millisecond-truncated ISO 8601). No
+    MT202 field carries this value (confirmed "No equivalent in MT" by the reference mapping) - it is the actual
+    date/time the conversion is performed. Do not attempt to derive it from field 32A's value date, which is a
     settlement date, not a message-creation timestamp.
 
 # ============================================================================
@@ -203,7 +243,7 @@ field_mappings:
 
 - source_field: "20"
   source_name: "Transaction Reference Number"
-  target_path: "FICdtTrf.CdtTrfTxInf.PmtId.InstrId"
+  target_path: "CdtTrfTxInf.PmtId.InstrId"
   mandatory: true
   transformation: direct_copy
   allowed_pattern: "^[^/]{1}.{0,14}[^/]{1}$|^.{1,16}$"
@@ -218,7 +258,7 @@ field_mappings:
 
 - source_field: "21"
   source_name: "Related Reference"
-  target_path: "FICdtTrf.CdtTrfTxInf.PmtId.EndToEndId"
+  target_path: "CdtTrfTxInf.PmtId.EndToEndId"
   mandatory: true
   transformation: direct_copy
   notes: >-
@@ -240,7 +280,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - SNDTIME (Sender's Time Stamp)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmIndctn.DbtDtTm"
+  target_path: "CdtTrfTxInf.SttlmTmIndctn.DbtDtTm"
   mandatory: false
   transformation: llm_assisted
   notes: >-
@@ -270,7 +310,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - RNCTIME (Receiver's Time Stamp)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmIndctn.CdtDtTm"
+  target_path: "CdtTrfTxInf.SttlmTmIndctn.CdtDtTm"
   mandatory: false
   transformation: llm_assisted
   notes: >-
@@ -284,7 +324,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - CLSTIME (Cover Time / Latest time by which cover must be received)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmReq.CLSTm"
+  target_path: "CdtTrfTxInf.SttlmTmReq.CLSTm"
   mandatory: false
   transformation: llm_assisted
   notes: "Paired with the SNDTIME entry above - identical mechanism, codeword CLSTIME."
@@ -296,7 +336,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - TILTIME (Till Time)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmReq.TillTm"
+  target_path: "CdtTrfTxInf.SttlmTmReq.TillTm"
   mandatory: false
   transformation: llm_assisted
   notes: "Paired with the SNDTIME entry above - identical mechanism, codeword TILTIME."
@@ -308,7 +348,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - FROTIME (From Time)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmReq.FrTm"
+  target_path: "CdtTrfTxInf.SttlmTmReq.FrTm"
   mandatory: false
   transformation: llm_assisted
   notes: "Paired with the SNDTIME entry above - identical mechanism, codeword FROTIME."
@@ -320,7 +360,7 @@ field_mappings:
 
 - source_field: "13C"
   source_name: "Time Indication - REJTIME (Reject Time)"
-  target_path: "FICdtTrf.CdtTrfTxInf.SttlmTmReq.RjctTm"
+  target_path: "CdtTrfTxInf.SttlmTmReq.RjctTm"
   mandatory: false
   transformation: llm_assisted
   notes: >-
@@ -336,7 +376,7 @@ field_mappings:
 
 - source_field: "32A"
   source_name: "Value Date, Currency, Amount - date portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.IntrBkSttlmDt"
+  target_path: "CdtTrfTxInf.IntrBkSttlmDt"
   mandatory: true
   transformation: llm_assisted
   extract_pattern: "^(\\d{6})"
@@ -352,7 +392,7 @@ field_mappings:
 
 - source_field: "32A"
   source_name: "Value Date, Currency, Amount - currency portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.IntrBkSttlmAmt.@Ccy"
+  target_path: "CdtTrfTxInf.IntrBkSttlmAmt.@Ccy"
   mandatory: true
   transformation: direct_copy
   extract_pattern: "^\\d{6}([A-Z]{3})"
@@ -364,37 +404,51 @@ field_mappings:
 
 - source_field: "32A"
   source_name: "Value Date, Currency, Amount - amount portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.IntrBkSttlmAmt"
+  target_path: "CdtTrfTxInf.IntrBkSttlmAmt"
   mandatory: true
-  transformation: direct_copy
+  transformation: decimal_comma_to_dot
   extract_pattern: "^\\d{6}[A-Z]{3}(.+)$"
   notes: >-
-    Same comma-to-dot decimal conversion as the companion MT103 document's 32A amount entry. No rounding or silent
-    truncation. Currency-specific minor-unit validation required, not a hard-coded two-decimal rule.
+    ENGINE FIX (v1.1): transformation was direct_copy, which just copies the raw SWIFT comma-decimal substring verbatim
+    (e.g. "1250000," for an even amount with no fractional digits, per standard SWIFT amount notation) - never converting
+    it to XSD-valid decimal lexical form, so any amount ending in a bare comma (the common "whole number" case) failed
+    XSD validation with cvc-datatype-valid.1.2.1 ('1250000,' is not a valid value for 'decimal'). The notes on this entry
+    already described "comma-to-dot decimal conversion" as the intent, but the transformation field itself never matched
+    that description. Fixed to transformation: decimal_comma_to_dot, the same engine mechanism already proven in the
+    companion MT103 document's 32A amount entry (its regex and bare-trailing-comma handling were themselves bug-fixed
+    earlier in this project - see TransformationEngine.decimalCommaToDot). No rounding or silent truncation.
+    Currency-specific minor-unit validation required, not a hard-coded two-decimal rule.
   edge_cases:
   - condition: "Amount portion missing or not a valid decimal after comma-to-dot conversion"
     handling: "reject"
 
 - source_field: "52A"
   source_name: "Ordering Institution, option A"
-  target_path: "FICdtTrf.CdtTrfTxInf.Dbtr.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.Dbtr.FinInstnId.BICFI"
   mandatory: false
   transformation: direct_copy
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
   notes: >-
     CRITICAL: at Sequence A / outer CdtTrfTxInf level, 52a maps to Dbtr directly (Dbtr is FI-typed at this level), NOT to
     DbtrAgt - see the CRITICAL STRUCTURAL DISTINCTION note in scope_notes. Confirmed by the worked reference example (52A
-    BACXCZPPXXX -> outer Dbtr/FinInstnId/BICFI BACXCZPPXXX). Field 52a's own usage rule ("Specifies the ordering financial
-    institution when other than the Sender of the message") is the basis for the Sender fallback below when 52a is absent
-    - this is the same universal MT-side usage rule already verified and cited in the companion MT103 document for its
-    analogous 52a entries, applied here at the outer level instead of DbtrAgt.
+    BACXCZPPXXX -> outer Dbtr/FinInstnId/BICFI BACXCZPPXXX).
+    POLICY CHANGE (v1.2, user decision 2026-09-01): a Sender-BIC fallback for Dbtr when 52a is absent was previously
+    implemented here, grounded only in field 52a's textual usage rule ("Specifies the ordering financial institution
+    when other than the Sender of the message") - a logical inference, NOT a worked example the way the 52a-present case
+    above is. On review, that tier of sourcing was judged too weak to safely infer a mandatory transaction party from
+    header-level routing data. The fallback has been REMOVED entirely: if 52A and 52D are both absent, Dbtr is left
+    entirely unpopulated by this document, and the conversion is expected to be REJECTED by the existing schema
+    completeness check (Dbtr is mandatory per CreditTransferTransaction36) rather than silently inferring the ordering
+    institution from the Sender. See VR-202-01 below and known_limitations.
   edge_cases:
   - condition: "Field absent"
-    handling: "not an error on its own - falls through to the Sender-BIC fallback below"
+    handling: "not an error on its own - falls through to 52D below; if both 52A and 52D are absent, Dbtr is left
+      unpopulated and the conversion is expected to be rejected by the schema completeness check (no fallback - see
+      POLICY CHANGE note above)"
 
 - source_field: "52D"
   source_name: "Ordering Institution, option D - name/address portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.Dbtr"
+  target_path: "CdtTrfTxInf.Dbtr"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -412,16 +466,17 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.Dbtr.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.Dbtr.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.Dbtr.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.Dbtr.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.Dbtr.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.Dbtr.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
     Same Othr/Id routing for an extracted Party Identifier as the companion MT103 document's (corrected) 52D/57D entries -
     this document applies that fix from the start rather than needing a later correction pass.
   edge_cases:
   - condition: "Field absent"
-    handling: "not an error on its own - falls through to the Sender-BIC fallback below"
+    handling: "not an error on its own - see the POLICY CHANGE note on the 52A entry above: if both 52A and 52D are
+      absent, Dbtr is left unpopulated and the conversion is expected to be rejected, not defaulted"
   - condition: "Content doesn't split cleanly"
     handling: "reject - do not guess"
   - condition: "First line is exactly '/' with no content after it"
@@ -429,7 +484,7 @@ field_mappings:
 
 - source_field: "52A"
   source_name: "Ordering Institution, option A - account portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+  target_path: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
   mandatory: false
   transformation: llm_assisted
   notes: >-
@@ -441,26 +496,9 @@ field_mappings:
   - condition: "No leading-slash account line present"
     handling: "not an error - this is the common case; DbtrAcct is simply left unpopulated from this source"
 
-- source_field: "__MT_SENDER_BIC__"
-  source_name: "MT header Block 1 (Sender) - Ordering Institution fallback"
-  target_path: "FICdtTrf.CdtTrfTxInf.Dbtr.FinInstnId.BICFI"
-  mandatory: true
-  transformation: direct_copy
-  notes: >-
-    Applies only when 52A and 52D are BOTH absent. Grounded directly in field 52a's own official usage rule: "Specifies
-    the ordering financial institution when other than the Sender of the message" - by definition, 52a's absence means the
-    Sender IS the ordering institution. This is the outer-level counterpart to the __MT_SENDER_BIC__ entry already used
-    (for DbtrAgt, not Dbtr) in the companion MT103 document; same synthetic field, different target per the CRITICAL
-    STRUCTURAL DISTINCTION noted in scope_notes.
-  edge_cases:
-  - condition: "52A or 52D is present"
-    handling: "this fallback does not apply - the explicit field value takes precedence"
-  - condition: "52A and 52D both absent, and the MT header Sender cannot be determined"
-    handling: "reject - mandatory pacs.009 element (Dbtr), no other sourced fallback"
-
 - source_field: "53A"
   source_name: "Sender's Correspondent, option A - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -480,7 +518,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
     See scope_notes DEPRECATED-ELEMENT FINDING. This entry deliberately extracts ONLY the account-identifying line -
@@ -500,7 +538,7 @@ field_mappings:
 
 - source_field: "53B"
   source_name: "Sender's Correspondent, option B - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -510,7 +548,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "See the 53A entry above for the shared SttlmAcct rationale."
   edge_cases:
@@ -519,7 +557,7 @@ field_mappings:
 
 - source_field: "53D"
   source_name: "Sender's Correspondent, option D - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -531,7 +569,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "See the 53A entry above for the shared SttlmAcct rationale and the deprecated-element gap."
   edge_cases:
@@ -540,7 +578,7 @@ field_mappings:
 
 - source_field: "54A"
   source_name: "Receiver's Correspondent, option A - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -554,7 +592,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "See the 53A entry above for the shared deprecated-element gap (this entry's BIC line is likewise not read)."
   edge_cases:
@@ -563,7 +601,7 @@ field_mappings:
 
 - source_field: "54B"
   source_name: "Receiver's Correspondent, option B - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -573,7 +611,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "See the 53A entry above for the shared SttlmAcct rationale."
   edge_cases:
@@ -582,7 +620,7 @@ field_mappings:
 
 - source_field: "54D"
   source_name: "Receiver's Correspondent, option D - account portion"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -592,7 +630,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "See the 53A entry above for the shared SttlmAcct rationale and the deprecated-element gap."
   edge_cases:
@@ -600,39 +638,38 @@ field_mappings:
     handling: "not an error - SttlmAcct is optional"
 
 - source_field: "GENERATED:SttlmMtd"
-  source_name: "Settlement Method (derived from presence/absence of 53a/54a)"
-  target_path: "FICdtTrf.GrpHdr.SttlmInf.SttlmMtd"
+  source_name: "Settlement Method - evidence-based value from the primary reference source's worked examples"
+  target_path: "GrpHdr.SttlmInf.SttlmMtd"
   mandatory: true
-  transformation: conditional
-  conditional:
-    check_fields:
-    - "53A"
-    - "53B"
-    - "53D"
-    - "54A"
-    - "54B"
-    - "54D"
-    if_any_present: "INGA"
-    if_none_present: "INDA"
+  transformation: constant
+  constant_value: "INDA"
   notes: >-
-    pacs.009's SttlmMtd is restricted to INDA (Instructed Agent settles) or INGA (Instructing Agent settles) in this
-    CBPR+ profile - COVE and CLRG, while valid SettlementMethod1Code values in the base ISO 20022 type, are not applicable
-    here: COVE is meaningless for a message that IS itself the interbank settlement instruction, and CLRG is the
-    market-infrastructure/clearing-system settlement pattern most associated with domestic RTGS systems (e.g. legacy
-    TARGET2 MT usage before its 2022 MX migration) rather than generic CBPR+ correspondent banking. THIS RULE IS A
-    CONSERVATIVE IMPLEMENTATION DEFAULT, NOT A CONFIRMED SWIFT TRANSLATION-PORTAL RULE: the reference mapping consulted
-    for this document describes what 53a/54a's presence relates to (settlement method and account) but does not spell out
-    an unambiguous "if 53a present then X, if 54a present then Y" algorithm, and this document does not invent one beyond
-    the direction shown in the worked example (no 53/54 present -> INDA). Must be verified against the actual corridor
-    configuration before production use, exactly as flagged for the analogous COVE/INDA rule in the companion MT103
-    document.
+    POLICY CHANGE (v1.3, user-directed research 2026-09-01): the earlier v1.2 decision removed all SttlmMtd derivation
+    entirely (see the BINDING ARCHITECTURAL DECISION note in scope_notes, itself now superseded by this entry) after
+    concluding SttlmMtd could not be derived from MT202 content at all. On the user's explicit direction to re-check
+    the actual Bank of America SWIFT Reference Guide (this document's own primary worked-example source, already
+    cited in sources_consulted) specifically for a 53a/54a-driven rule, TWO real worked examples were found - not mere
+    field-definition inference, actual cited input-to-output examples:
+    (1) Field 6 ("Sender's correspondent") worked example: ":53B:/BOFA-ACCT-1234" -> "<SttlmInf><SttlmMtd>INDA</SttlmMtd>
+    <SttlmAcct><Id><Othr><Id>BOFA-ACCT-1234</Id></Othr></Id></SttlmAcct></SttlmInf>" - 53a PRESENT resolves to INDA.
+    (2) Section 15's complete worked MT202COV example carries NO 53a or 54a field at all, yet its own correct,
+    authoritative pacs.009 output still contains "<SttlmMtd>INDA</SttlmMtd>" - 53a/54a BOTH ABSENT also resolves to
+    INDA in this source.
+    Both branches this document could actually test resolve to the same value, so this entry is a constant, not a
+    conditional - a conditional with two identical outcomes would only add false complexity implying a distinction the
+    evidence does not support. See known_limitations for the residual INGA gap this does NOT close: no worked example
+    in ANY of the three authoritative sources reviewed for this document (this Bank of America guide, Standard
+    Chartered's CBPR+ pacs.009 guide, or BNY's pacs.009 deep dive) demonstrates a scenario that resolves to INGA, COVE,
+    or CLRG - only INDA is ever evidenced. This document therefore cannot claim to correctly handle a real-world
+    scenario that genuinely requires INGA; it will emit INDA regardless. This is a narrower, more honest limitation
+    than "no source at all" (the v1.2 position), but it is still a real one.
   edge_cases:
-  - condition: "Both 53-series and 54-series fields present with information suggesting different settlement methods"
-    handling: "flag for manual review - do not silently pick one"
+  - condition: "N/A - always generated per the evidence above, never absent"
+    handling: "not applicable"
 
 - source_field: "56A"
   source_name: "Intermediary, option A"
-  target_path: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1"
+  target_path: "CdtTrfTxInf.IntrmyAgt1"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -651,8 +688,8 @@ field_mappings:
     sub_elements:
       BICFI: "line:0"
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1.FinInstnId.BICFI"
-      Id: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1Acct.Id.Othr.Id"
+      BICFI: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.BICFI"
+      Id: "CdtTrfTxInf.IntrmyAgt1Acct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
     Sequence A only offers options A or D for 56a (no C) - confirmed by the official MT202COV Format Specifications table
@@ -668,7 +705,7 @@ field_mappings:
 
 - source_field: "56D"
   source_name: "Intermediary, option D - name/address portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1"
+  target_path: "CdtTrfTxInf.IntrmyAgt1"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -682,9 +719,9 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.IntrmyAgt1.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: "Sequence A offers only options A or D for 56a - see 56A entry above."
   edge_cases:
@@ -695,7 +732,7 @@ field_mappings:
 
 - source_field: "57A"
   source_name: "Account With Institution, option A"
-  target_path: "FICdtTrf.CdtTrfTxInf.CdtrAgt"
+  target_path: "CdtTrfTxInf.CdtrAgt"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -709,8 +746,8 @@ field_mappings:
     sub_elements:
       BICFI: "line:0"
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
-      Id: "FICdtTrf.CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
+      BICFI: "CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
+      Id: "CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
     Sequence A offers options A, B, or D for 57a (confirmed by the official format spec table). Maps to CdtrAgt - "the
@@ -726,7 +763,7 @@ field_mappings:
 
 - source_field: "57D"
   source_name: "Account With Institution, option D - name/address portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.CdtrAgt"
+  target_path: "CdtTrfTxInf.CdtrAgt"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -744,9 +781,9 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.CdtrAgt.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.CdtrAgt.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent"
@@ -756,7 +793,7 @@ field_mappings:
 
 - source_field: "57B"
   source_name: "Account With Institution, option B - account/party-identifier portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
+  target_path: "CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -770,7 +807,7 @@ field_mappings:
         rule: "regex:^/(.+)$"
         optional: true
     sub_element_targets:
-      Id: "FICdtTrf.CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
+      Id: "CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
     KNOWN GAP (see known_limitations): the optional bare Location line (option B's "[35x]" line, when present) is not
@@ -783,8 +820,8 @@ field_mappings:
 
 - source_field: "58A"
   source_name: "Beneficiary Institution, option A"
-  target_path: "FICdtTrf.CdtTrfTxInf.Cdtr"
-  mandatory: true
+  target_path: "CdtTrfTxInf.Cdtr"
+  mandatory: false
   transformation: decompose_party
   decomposition:
     pattern_description: >-
@@ -798,26 +835,34 @@ field_mappings:
     sub_elements:
       BICFI: "line:0"
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.Cdtr.FinInstnId.BICFI"
-      Id: "FICdtTrf.CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+      BICFI: "CdtTrfTxInf.Cdtr.FinInstnId.BICFI"
+      Id: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
     fallback_if_unparseable: raise_error
   notes: >-
-    58a is MANDATORY in Sequence A (confirmed by the official format spec table: "M | 58a | Beneficiary Institution").
+    58a is MANDATORY in Sequence A (confirmed by the official format spec table: "M | 58a | Beneficiary Institution",
+    and by the SRU2025 mandatory-fields table supplied 2026-09-01: "58a | Beneficiary Institution | M | 58A or 58D").
     Maps to the outer Cdtr - "the financial institution which has been designated by the ordering institution as the
     ultimate recipient of the funds" - confirmed by the worked reference example (58A BOFADEFXXXX -> outer Cdtr/
     FinInstnId/BICFI BOFADEFXXXX). This is the CORE-level mandatory-customer-data analogue of the companion MT103
     document's VR006 (Dbtr/Cdtr must not be empty) - see VR-202-03 below.
+    ENGINE FIX (v1.1): this entry's OWN mandatory flag must be false, not true - 58a is mandatory as an ALTERNATIVE
+    GROUP (58A or 58D, never both in one message), but ConverterService's mandatory check is a plain per-source_field
+    presence check with no concept of "one of several fields." Marking this entry mandatory:true meant that ANY real
+    message using 58D instead of 58A (a perfectly valid, common case) would throw here before ever reaching 58D's own
+    entry - i.e. every 58D-only message was unconditionally broken. The actual "at least one of 58A/58D must be
+    present" requirement is now machine-enforced at the group level by VR-202-03 (rule_type:
+    source_alternative_group_required), the same mechanism the companion MT103 document already uses for its own
+    50A/50F/50K and 59/59A/59F alternative groups.
   edge_cases:
   - condition: "Field absent (both 58A and 58D)"
-    handling: "reject - mandatory pacs.009 element, no fallback exists (unlike 57a's Receiver-BIC fallback in pacs.008,
-      there is no equivalent 'assume the Receiver' rule documented for 58a - do not invent one)"
+    handling: "reject - see VR-202-03; not enforced by this entry's own mandatory flag any more"
   - condition: "No leading-slash account line present"
     handling: "not an error - the common case; only the BICFI sub-element is produced"
 
 - source_field: "58D"
   source_name: "Beneficiary Institution, option D - name/address portion"
-  target_path: "FICdtTrf.CdtTrfTxInf.Cdtr"
-  mandatory: true
+  target_path: "CdtTrfTxInf.Cdtr"
+  mandatory: false
   transformation: decompose_party
   decomposition:
     pattern_description: >
@@ -833,11 +878,14 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.Cdtr.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.Cdtr.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.Cdtr.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.Cdtr.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.Cdtr.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.Cdtr.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
-  notes: "Mandatory in the sense that one of 58A/58D must be present and parseable - see VR-202-03."
+  notes: >-
+    Mandatory in the sense that one of 58A/58D must be present and parseable - see VR-202-03. ENGINE FIX (v1.1): this
+    entry's own mandatory flag must be false, not true - see the identical note on the 58A entry above; the group
+    requirement is enforced by VR-202-03, not by either option's individual entry.
   edge_cases:
   - condition: "Neither 58A nor 58D present"
     handling: "reject - see VR-202-03"
@@ -846,7 +894,7 @@ field_mappings:
 
 - source_field: "72"
   source_name: "Sender to Receiver Information - /ACC/ instruction for creditor agent"
-  target_path: "FICdtTrf.CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
+  target_path: "CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -863,7 +911,7 @@ field_mappings:
         rule: "regex:/ACC/(.+)"
         optional: true
     sub_element_targets:
-      InstrInf: "FICdtTrf.CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
+      InstrInf: "CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent, or no /ACC/ segment present"
@@ -871,7 +919,7 @@ field_mappings:
 
 - source_field: "72"
   source_name: "Sender to Receiver Information - first /INS/ (Previous Instructing Agent 1)"
-  target_path: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -883,7 +931,7 @@ field_mappings:
         rule: "regex:/INS/(\\S+)"
         optional: true
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent, or no /INS/ occurrence present"
@@ -891,7 +939,7 @@ field_mappings:
 
 - source_field: "72"
   source_name: "Sender to Receiver Information - second /INS/ (Previous Instructing Agent 2)"
-  target_path: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -906,7 +954,7 @@ field_mappings:
         rule: "regex:/INS/(\\S+)"
         optional: true
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent, or no second /INS/ occurrence present"
@@ -914,7 +962,7 @@ field_mappings:
 
 - source_field: "72"
   source_name: "Sender to Receiver Information - third /INS/ (Previous Instructing Agent 3)"
-  target_path: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -924,7 +972,7 @@ field_mappings:
         rule: "regex:/INS/(\\S+)"
         optional: true
     sub_element_targets:
-      BICFI: "FICdtTrf.CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
+      BICFI: "CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent, or no third /INS/ occurrence present"
@@ -932,7 +980,7 @@ field_mappings:
 
 - source_field: "72"
   source_name: "Sender to Receiver Information - /BNF/ remittance information"
-  target_path: "FICdtTrf.CdtTrfTxInf.RmtInf.Ustrd"
+  target_path: "CdtTrfTxInf.RmtInf.Ustrd"
   mandatory: false
   transformation: decompose_party
   decomposition:
@@ -942,7 +990,7 @@ field_mappings:
         rule: "regex:/BNF/(.+)"
         optional: true
     sub_element_targets:
-      Ustrd: "FICdtTrf.CdtTrfTxInf.RmtInf.Ustrd"
+      Ustrd: "CdtTrfTxInf.RmtInf.Ustrd"
     fallback_if_unparseable: raise_error
   notes: >-
     Any codeword other than ACC/INS/BNF (the reference mapping's own fallback: route to InstrForNxtAgt/InstrInf as
@@ -960,7 +1008,7 @@ field_mappings:
 
 - source_field: "COV_FLAG"
   source_name: "MT202COV validation flag ({3:{119:COV}} in User Header Block 3)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf"
   mandatory: false
   transformation: no_op
   notes: >-
@@ -990,27 +1038,42 @@ field_mappings:
 
 - source_field: "50A"
   source_name: "Ordering Customer, option A (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.Id.OrgId.AnyBIC"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.Id.OrgId.AnyBIC"
   mandatory: false
-  transformation: direct_copy
+  transformation: conditional
+  conditional:
+    check_fields:
+    - "COV_FLAG"
+    skip_if_none_present: true
+    if_any_present_field: "50A"
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
   notes: >-
-    Sequence B's Dbtr is customer-typed (PartyIdentification135) - identical shape to pacs.008's Dbtr. Field 50a here has
-    the same three options as MT103's 50a (A, F, or K - confirmed by the official MT202COV format spec table: "M | 50a |
-    Ordering Customer | A, F, or K"), and this document applies the identical, already-verified logic from the companion
-    MT103 -> pacs.008 mapping document's 50A/50F/50K entries, retargeted to UndrlygCstmrCdtTrf.Dbtr instead of the
-    top-level Dbtr. Only present when COV_FLAG is set.
+    ENGINE FIX (v1.3): gated on COV_FLAG for the same reason as the Sequence B 52A entry (see its notes for the full
+    live-test finding) - 50a is not part of plain MT202 CORE format, so this specific collision is unlikely in
+    practice, but gating it is free and keeps VR-202-05's invariant robustly true rather than true "by luck" for this
+    particular field. Sequence B's Dbtr is customer-typed (PartyIdentification135) - identical shape to pacs.008's
+    Dbtr. Field 50a here has the same three options as MT103's 50a (A, F, or K - confirmed by the official MT202COV
+    format spec table: "M | 50a | Ordering Customer | A, F, or K"), and this document applies the identical,
+    already-verified logic from the companion MT103 -> pacs.008 mapping document's 50A/50F/50K entries, retargeted to
+    UndrlygCstmrCdtTrf.Dbtr instead of the top-level Dbtr.
   edge_cases:
-  - condition: "Field absent"
+  - condition: "COV_FLAG absent"
+    handling: "produces nothing - not an error"
+  - condition: "COV_FLAG present, but 50A absent"
     handling: "not an error on its own if 50F or 50K is present instead - see VR-202-04"
 
-- source_field: "50K"
+- source_field: "50K_seqB"
   source_name: "Ordering Customer, option K - name/address and account portion (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr"
   mandatory: false
   transformation: decompose_party
   decomposition:
     pattern_description: >
+      ENGINE FIX (v1.3): source_field renamed from bare "50K" to "50K_seqB" - same class of fix as the Sequence B 52D
+      entry above (see its notes for the full rationale). 50a is not part of plain MT202 CORE format, so this
+      specific collision was lower-probability in practice than 52a/52d, but the fix is free and closes the gap
+      uniformly - see MtParserService's SEQUENCE_B_MIRROR_TAGS. Requires the same Java rebuild to actually populate;
+      until then this entry is safely inert rather than a live risk.
       Identical pattern to the already-verified 50K entry in the companion MT103 document (plain unstructured lines:
       first non-account line = Nm, remaining lines = repeated AdrLine, no invented Town/Country/PstCd structure),
       retargeted into the nested UndrlygCstmrCdtTrf.
@@ -1023,8 +1086,8 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      AccountId: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAcct.Id.Othr.Id"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.PstlAdr.AdrLine"
+      AccountId: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAcct.Id.Othr.Id"
+      AdrLine: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.PstlAdr.AdrLine"
     fallback_if_unparseable: raise_error
   notes: >-
     Confirmed against the worked reference example: MT202COV field 50K (name "ABC Constructions.", address lines, account
@@ -1039,12 +1102,15 @@ field_mappings:
   - condition: "A line is exactly '/' with no content after it"
     handling: "reject - malformed account line"
 
-- source_field: "50F"
+- source_field: "50F_seqB"
   source_name: "Ordering Customer, option F (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAcct.Id.Othr.Id"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAcct.Id.Othr.Id"
   mandatory: false
   transformation: llm_assisted
   notes: >-
+    ENGINE FIX (v1.3): source_field renamed from bare "50F" to "50F_seqB" - same class of fix as the Sequence B 52D
+    entry above; requires the same Java rebuild (MtParserService's SEQUENCE_B_MIRROR_TAGS) to populate, safely inert
+    until then.
     Same fail-closed posture as the companion MT103 document's 50F entry: numbered-line (1/2/3/) structured data. Only the
     account portion is extracted here; the Nm/PstlAdr for a 50F-only Sequence B is NOT populated by any entry in this
     document (identical known limitation to MT103's 50F), so per VR-202-04/VR006-equivalent, a Sequence B that uses ONLY
@@ -1058,18 +1124,38 @@ field_mappings:
 
 - source_field: "52A"
   source_name: "Ordering Institution, option A (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: conditional
+  conditional:
+    check_fields:
+    - "COV_FLAG"
+    skip_if_none_present: true
+    if_any_present_field: "52A"
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
   notes: >-
-    CRITICAL: unlike Sequence A's 52a (which maps to the outer Dbtr - see the 52A entry above), Sequence B's 52a maps to
-    DbtrAgt, because Sequence B's Dbtr is the customer (from 50a) and 52a here plays the same "ordering institution acting
-    as agent for the customer" role it plays in MT103 -> pacs.008. This is the same field name appearing twice in the same
-    message with two different target shapes - see the CRITICAL STRUCTURAL DISTINCTION note in scope_notes. Sequence B
-    offers only options A or D for 52a (same as Sequence A - confirmed by the format spec table).
+    ENGINE FIX (v1.3, live-test finding 2026-09-01): was transformation: direct_copy, which reads source_field "52A"
+    unconditionally - the EXACT SAME literal source_field the Sequence A "52A" entry (outer Dbtr) also reads. Since
+    MtParserService has no Sequence A/B boundary detection (see the ENGINE LIMITATION bullet in known_limitations) and
+    this entry had no gate at all, ANY plain CORE MT202 (no COV_FLAG) carrying an ordinary 52A would ALSO populate this
+    Sequence B target - triggering VR-202-05's rejection ('UndrlygCstmrCdtTrf populated but COV_FLAG absent') for
+    completely ordinary, valid CORE traffic. Confirmed via live testing against the running app, not simulation. Fixed
+    by gating this entry on COV_FLAG using the engine's existing conditional/skip_if_none_present mechanism (no source
+    lookup happens at all unless COV_FLAG is present) - the same mechanism already used correctly elsewhere in this
+    document (e.g. the outer Dbtr/57A fallback entries). This does NOT fully solve the underlying Sequence A/B
+    collision: for a GENUINE MT202COV that carries 52a in BOTH sequences, this entry will still copy whatever
+    MtParserService merged under the shared "52A" key (which may be a corrupted/joined value) - that residual risk
+    remains, unchanged, and requires the deferred MtParserService Sequence A/B boundary-detection work to fully close.
+    What this DOES fix: the far more common case of an ordinary CORE MT202 (or a COV message where only Sequence A
+    carries 52a) no longer misfires into Sequence B at all.
+    CRITICAL (unchanged from before): unlike Sequence A's 52a (which maps to the outer Dbtr - see the 52A entry above),
+    Sequence B's 52a maps to DbtrAgt, because Sequence B's Dbtr is the customer (from 50a) and 52a here plays the same
+    "ordering institution acting as agent for the customer" role it plays in MT103 -> pacs.008. Sequence B offers only
+    options A or D for 52a (same as Sequence A - confirmed by the format spec table).
   edge_cases:
-  - condition: "Field absent"
+  - condition: "COV_FLAG absent (plain MT202, or the 'skip' branch of a properly-behaved COV message)"
+    handling: "produces nothing - not an error, and no longer misfires into UndrlygCstmrCdtTrf"
+  - condition: "COV_FLAG present, but 52A absent from the source message"
     handling: >-
       UNRESOLVED, DELIBERATELY NOT DEFAULTED - see known_limitations. The natural fallback would be 'the Sender of the
       underlying MT103', per the general MT principle that 52a's absence means the Sender is the ordering institution -
@@ -1077,13 +1163,24 @@ field_mappings:
       necessarily the Sender of this MT202COV message. This document does not have visibility into the original MT103's
       header and will not assume the two Senders are the same institution. Fail closed rather than guess.
 
-- source_field: "52D"
+- source_field: "52D_seqB"
   source_name: "Ordering Institution, option D - name/address portion (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt"
   mandatory: false
   transformation: decompose_party
   decomposition:
-    pattern_description: "Same name/address decomposition pattern as the Sequence A 52D entry above, retargeted."
+    pattern_description: >-
+      ENGINE FIX (v1.3): source_field was bare "52D" - the SAME literal name the Sequence A 52D entry reads - with no
+      gate at all, so ANY plain CORE MT202 carrying a 52D would ALSO populate this Sequence B target, triggering
+      VR-202-05's rejection for ordinary, valid CORE traffic (the exact live-tested bug already fixed for 52A - see
+      that entry's notes for the full finding; 52D has the identical shape but is decompose_party, which the engine's
+      conditional/skip_if_none_present gate cannot wrap the way it can direct_copy). Fixed by pointing this entry at
+      "52D_seqB" instead - a synthetic key MtParserService now mirrors from the bare "52D" ONLY when Block 3 field 119
+      signals COV (see MtParserService's SEQUENCE_B_MIRROR_TAGS). REQUIRES A JAVA REBUILD to take effect: until that
+      mirroring code is compiled and deployed, this entry is safely INERT (never fires at all, since the "52D_seqB"
+      key does not yet exist) rather than actively wrong - a strict improvement over the prior state (no
+      recompilation required to stop the collision) while the real fix is pending deployment. Same name/address
+      decomposition pattern as the Sequence A 52D entry above, retargeted.
     strip_account_line_prefix: true
     account_line_pattern: "^/(.+)$"
     account_sub_element: "Id"
@@ -1093,9 +1190,9 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent"
@@ -1105,11 +1202,15 @@ field_mappings:
 
 - source_field: "56A_seqB"
   source_name: "Intermediary Institution, option A (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.BICFI"
   mandatory: false
   transformation: direct_copy
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
   notes: >-
+    ENGINE FIX (v1.3): this source_field name was already "_seqB"-suffixed, but MtParserService never produced a
+    matching key regardless of COV_FLAG, so this entry was previously permanently inert (dead code, not just
+    COV-gated). It now starts working correctly once MtParserService's new SEQUENCE_B_MIRROR_TAGS mirroring (see that
+    class) is compiled and deployed - the same Java rebuild dependency as the Sequence B 52D entry above.
     Sequence B offers options A, C, or D for 56a (includes option C, unlike Sequence A which only offers A or D) -
     confirmed by the official format spec table ("O | 56a | Intermediary Institution | A, C, or D" for Sequence B vs.
     "A or D" for Sequence A). Option C (party identifier/account only, BIC-less, no name) is not separately implemented in
@@ -1120,11 +1221,14 @@ field_mappings:
 
 - source_field: "56D_seqB"
   source_name: "Intermediary Institution, option D - name/address portion (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1"
   mandatory: false
   transformation: decompose_party
   decomposition:
-    pattern_description: "Same name/address decomposition pattern as other option-D entries in this document."
+    pattern_description: >-
+      ENGINE FIX (v1.3): same "was already _seqB-suffixed but permanently inert" fix as the Sequence B 56A entry
+      above - now starts working once MtParserService's SEQUENCE_B_MIRROR_TAGS mirroring is deployed.
+      Same name/address decomposition pattern as other option-D entries in this document.
     strip_account_line_prefix: true
     account_line_pattern: "^/(.+)$"
     account_sub_element: "Id"
@@ -1134,9 +1238,9 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.UndrlygCstmrCdtTrf.IntrmyAgt1.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent"
@@ -1146,11 +1250,13 @@ field_mappings:
 
 - source_field: "57A_seqB"
   source_name: "Account With Institution, option A (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.BICFI"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.BICFI"
   mandatory: false
   transformation: direct_copy
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
   notes: >-
+    ENGINE FIX (v1.3): same "was already _seqB-suffixed but permanently inert" fix as the Sequence B 56A entry above -
+    now starts working once MtParserService's SEQUENCE_B_MIRROR_TAGS mirroring is deployed.
     Sequence B offers options A, B, C, or D for 57a (includes option C, unlike Sequence A's A/B/D) - confirmed by the
     official format spec table. Marked "Conditional (see rule C2)" in the official specification - this document has not
     independently confirmed the exact trigger condition for rule C2 and does not invent one; treat 57a in Sequence B as
@@ -1164,13 +1270,22 @@ field_mappings:
       UNRESOLVED - see notes above. Does not default to any fallback BIC; a strict converter should flag for review
       rather than silently proceed if the underlying transfer's actual Receiver cannot be independently confirmed.
 
-- source_field: "57B_or_57C_or_57D_seqB"
-  source_name: "Account With Institution, option B, C, or D (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt"
+- source_field: "57D_seqB"
+  source_name: "Account With Institution, option D - name/address portion (Sequence B)"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt"
   mandatory: false
   transformation: decompose_party
   decomposition:
-    pattern_description: "Same decomposition pattern as other option-D entries; option C is party-identifier-only, no name."
+    pattern_description: >-
+      ENGINE FIX (v1.3): split from the original combined "57B_or_57C_or_57D_seqB" entry, whose source_field never
+      matched what MtParserService actually produces regardless of COV_FLAG (same class of unreachable-name bug fixed
+      elsewhere in this document for the Sequence A equivalent). This entry keeps the ORIGINAL combined entry's own
+      target routing (Id -> CdtrAgt.FinInstnId.Othr.Id, an alternate identifier for the AGENT itself) rather than the
+      CdtrAgtAcct routing chosen for the Sequence A 57B entry earlier in this document - that is a genuine, disclosed
+      inconsistency between how this document treats an "identifier-only" 57 value at Sequence A level vs Sequence B
+      level; see known_limitations. Not resolved here to avoid silently picking a side on a business-modeling question
+      neither this split nor the original entry ever independently sourced. Requires the same Java rebuild as the
+      other _seqB entries in this document to actually populate.
     strip_account_line_prefix: true
     account_line_pattern: "^/(.+)$"
     account_sub_element: "Id"
@@ -1180,9 +1295,9 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      Nm: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Nm"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.PstlAdr.AdrLine"
-      Id: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id"
+      Nm: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Nm"
+      AdrLine: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.PstlAdr.AdrLine"
+      Id: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id"
     fallback_if_unparseable: raise_error
   edge_cases:
   - condition: "Field absent"
@@ -1190,13 +1305,39 @@ field_mappings:
   - condition: "First line is exactly '/' with no content after it"
     handling: "reject - malformed party-identifier line"
 
-- source_field: "59"
+- source_field: "57B_seqB"
+  source_name: "Account With Institution, option B - identifier-only portion (Sequence B)"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      ENGINE FIX (v1.3): the other half of the "57B_or_57C_or_57D_seqB" split - option B has no name/address content,
+      just an optional Party Identifier line, mirroring the Sequence A 57B/57C pattern of an "Id"-only regex
+      extraction rather than the Nm/AdrLine decompose used for option D.
+    sub_elements:
+      Id:
+        rule: "regex:^/(.+)$"
+        optional: true
+    sub_element_targets:
+      Id: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id"
+    fallback_if_unparseable: raise_error
+  edge_cases:
+  - condition: "Field absent, or present with no leading-slash identifier line"
+    handling: "not an error - this entry produces no value; Id is optional"
+
+- source_field: "59_seqB"
   source_name: "Beneficiary Customer, no letter option (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr"
   mandatory: false
   transformation: decompose_party
   decomposition:
     pattern_description: >
+      ENGINE FIX (v1.3): source_field renamed from bare "59" to "59_seqB" - same class of fix as the Sequence B 52D
+      entry above; requires the same Java rebuild (MtParserService's SEQUENCE_B_MIRROR_TAGS) to populate, safely
+      inert until then. Note "59" does not collide with any Sequence A entry in THIS document (Sequence A has no 59a
+      field at all), but is renamed anyway for uniformity and to keep VR-202-05's invariant robustly true rather than
+      true "by luck" for this specific field.
       Identical pattern to the already-verified bare-59 entry in the companion MT103 document, retargeted into the
       nested UndrlygCstmrCdtTrf. Sequence B's 59a offers the same three options as MT103's 59a (no letter, A, or F -
       confirmed by the official format spec table: "M | 59a | Beneficiary Customer | No letter option, A, or F").
@@ -1209,8 +1350,8 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      AccountId: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAcct.Id.Othr.Id"
-      AdrLine: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.PstlAdr.AdrLine"
+      AccountId: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAcct.Id.Othr.Id"
+      AdrLine: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.PstlAdr.AdrLine"
     fallback_if_unparseable: raise_error
   notes: >-
     Confirmed against the worked reference example: MT202COV field 59 (account AA12345678912345678912, name "PQR
@@ -1226,21 +1367,32 @@ field_mappings:
 
 - source_field: "59A"
   source_name: "Beneficiary Customer, option A (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.Id.OrgId.AnyBIC"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.Id.OrgId.AnyBIC"
   mandatory: false
-  transformation: direct_copy
+  transformation: conditional
+  conditional:
+    check_fields:
+    - "COV_FLAG"
+    skip_if_none_present: true
+    if_any_present_field: "59A"
   allowed_pattern: "^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
-  notes: "Same treatment as the companion MT103 document's 59A entry, retargeted."
+  notes: >-
+    ENGINE FIX (v1.3): gated on COV_FLAG - see the Sequence B 52A entry's notes for the full live-test finding this
+    mirrors. Same treatment as the companion MT103 document's 59A entry, retargeted.
   edge_cases:
-  - condition: "Field absent"
+  - condition: "COV_FLAG absent"
+    handling: "produces nothing - not an error"
+  - condition: "COV_FLAG present, but 59A absent"
     handling: "not an error if 59 or 59F present instead"
 
-- source_field: "59F"
+- source_field: "59F_seqB"
   source_name: "Beneficiary Customer, option F (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAcct.Id.Othr.Id"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAcct.Id.Othr.Id"
   mandatory: false
   transformation: llm_assisted
   notes: >-
+    ENGINE FIX (v1.3): source_field renamed from bare "59F" to "59F_seqB" - same class of fix as the Sequence B 52D
+    entry above; requires the same Java rebuild to populate, safely inert until then.
     Same fail-closed posture as the companion MT103 document's 59F entry - only the account portion is extracted;
     Nm/PstlAdr for a 59F-only Sequence B is NOT populated, so a Sequence B using ONLY 59F must reject before
     serialization (VR-202-04).
@@ -1252,11 +1404,17 @@ field_mappings:
 
 - source_field: "70"
   source_name: "Remittance Information (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.RmtInf.Ustrd"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.RmtInf.Ustrd"
   mandatory: false
-  transformation: direct_copy
+  transformation: conditional
+  conditional:
+    check_fields:
+    - "COV_FLAG"
+    skip_if_none_present: true
+    if_any_present_field: "70"
   notes: >-
-    Unstructured remittance information, carried forward unaltered from the underlying MT103 per Sequence B's
+    ENGINE FIX (v1.3): gated on COV_FLAG - see the Sequence B 52A entry's notes for the full live-test finding this
+    mirrors. Unstructured remittance information, carried forward unaltered from the underlying MT103 per Sequence B's
     "replicate unaltered fields" design intent. This document does not attempt the /ROC/ -> EndToEndId split that the
     companion MT103 document performs on its own field 70, because Sequence B's EndToEndId equivalent does not exist at
     this nested level (CreditTransferTransaction37 has no PmtId of its own - see known_limitations) - field 70 here maps
@@ -1265,20 +1423,54 @@ field_mappings:
   - condition: "Field absent"
     handling: "not an error - optional"
 
-- source_field: "33B"
-  source_name: "Currency/Instructed Amount (Sequence B)"
-  target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.InstdAmt"
+- source_field: "33B_seqB"
+  source_name: "Currency/Instructed Amount (Sequence B) - currency portion"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.InstdAmt.@Ccy"
   mandatory: false
   transformation: direct_copy
+  extract_pattern: "^([A-Z]{3})"
+  allowed_pattern: "^[A-Z]{3}$"
   notes: >-
-    Maps to InstdAmt (with currency as the @Ccy attribute), confirmed by the worked reference example (33B EUR241,7 ->
-    InstdAmt Ccy="EUR">241.7). STRUCTURAL NOTE: CreditTransferTransaction37 (this nested type) has no XchgRate sibling
-    element the way pacs.008's top-level Amt/InstdAmt does - if 33B's currency differs from 32A's settlement currency,
-    this schema has no element in which to record an exchange rate at this nested level. This is a structural fact about
-    the pacs.009.001.08 XSD, not a mapping choice - do not invent an XchgRate placement.
+    ENGINE FIX (v1.3): source_field renamed from bare "33B" to "33B_seqB" - same class of fix as the Sequence B 52D
+    entry above; requires the same Java rebuild (MtParserService's SEQUENCE_B_MIRROR_TAGS) to populate, safely inert
+    until then. Unlike 52A/52D, this entry could not simply be wrapped in the engine's conditional/skip_if_none_present
+    mechanism instead, because conditional's if_any_present_field copies a field's raw value verbatim with no
+    extract_pattern support - it would have copied the WHOLE raw 33B value (e.g. "EUR241,7") into the Ccy attribute
+    instead of just the 3-letter prefix, breaking the currency extraction this entry depends on. The _seqB mirror
+    approach was the only fix compatible with extract_pattern.
+    ENGINE FIX (v1.1): this and the amount-portion entry below replace a single prior entry that used transformation:
+    direct_copy with NO extract_pattern at all, targeting InstdAmt directly - which would have copied the entire raw
+    value (e.g. "EUR241,7") into InstdAmt's text content verbatim, both leaving the mandatory Ccy attribute unset
+    (ActiveCurrencyAndAmount requires Ccy as an XML ATTRIBUTE, not inferred from text content) and never converting the
+    comma-decimal amount. Same class of bug as the 32A/IntrBkSttlmAmt fix above, and already solved once in this exact
+    engine (MxRenderer's ".@Attr" convention, plus splitting into a currency-portion and amount-portion entry) - see
+    that entry's notes and the companion MT103 document's 32A/33B entries for the full rationale. Currency extraction
+    (first 3 characters) is deterministic fixed-width extraction, not a judgement call.
   edge_cases:
   - condition: "Field absent"
     handling: "not an error - optional"
+  - condition: "First 3 characters not 3 uppercase letters"
+    handling: "reject - do not guess currency"
+
+- source_field: "33B_seqB"
+  source_name: "Currency/Instructed Amount (Sequence B) - amount portion"
+  target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf.InstdAmt"
+  mandatory: false
+  transformation: decimal_comma_to_dot
+  extract_pattern: "^[A-Z]{3}(.+)$"
+  notes: >-
+    ENGINE FIX (v1.3): source_field renamed from bare "33B" to "33B_seqB" - see the currency-portion entry above for
+    the full rationale (same pairing, same fix, same Java-rebuild dependency).
+    Paired with the currency-portion entry above. Maps to InstdAmt, confirmed by the worked reference example (33B
+    EUR241,7 -> InstdAmt Ccy="EUR">241.7). STRUCTURAL NOTE: CreditTransferTransaction37 (this nested type) has no
+    XchgRate sibling element the way pacs.008's top-level Amt/InstdAmt does - if 33B's currency differs from 32A's
+    settlement currency, this schema has no element in which to record an exchange rate at this nested level. This is a
+    structural fact about the pacs.009.001.08 XSD, not a mapping choice - do not invent an XchgRate placement.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - optional"
+  - condition: "Remainder is not a valid comma-decimal number"
+    handling: "reject - enforced by decimal_comma_to_dot"
   - condition: "Currency differs from 32A/IntrBkSttlmAmt currency"
     handling: "populate InstdAmt as specified; do not attempt to record an exchange rate anywhere - none exists in this
       nested type"
@@ -1293,7 +1485,7 @@ validation_rules:
     Dbtr/FinInstnId/PstlAdr must also be present - an account with no identified institution is not valid per the
     reference mapping's explicit usage guidance.
   applies_to:
-  - "FICdtTrf.CdtTrfTxInf.DbtrAcct"
+  - "CdtTrfTxInf.DbtrAcct"
   severity: error
 
 - rule_id: VR-202-02
@@ -1301,17 +1493,38 @@ validation_rules:
     If both a 53-series and 54-series field are present with settlement-account content that conflicts (different
     account values), flag for manual review rather than silently applying field precedence.
   applies_to:
-  - "FICdtTrf.GrpHdr.SttlmInf.SttlmAcct"
+  - "GrpHdr.SttlmInf.SttlmAcct"
   severity: warning
 
 - rule_id: VR-202-03
   description: >-
-    Do not emit an empty Cdtr element (outer, Sequence A) as a fallback. 58a is mandatory in MT202/MT202COV Sequence A;
-    if 58A and 58D are both absent, or present but unparseable, reject conversion before XML serialization. Mirrors the
-    companion MT103 document's VR006 for Dbtr/Cdtr, applied here to the outer FI-typed Cdtr.
+    MT202 Sequence A mandatory source fields must be present, per both the official MT202 format spec table and the
+    SRU2025 mandatory-fields table supplied 2026-09-01: 20 (Transaction Reference Number), 21 (Related Reference), 32A
+    (Value Date/Currency/Amount) as single fields, and 58a (Beneficiary Institution) as an alternative group - exactly
+    one of 58A/58D must be present. Do not emit an empty Cdtr element as a fallback if 58a is absent entirely. Mirrors
+    the companion MT103 document's VR005 alternative-group mechanism (there covering 50A/50F/50K and 59/59A/59F),
+    applied here to the single-option 58A/58D group plus the flat single-field requirements.
   applies_to:
-  - "FICdtTrf.CdtTrfTxInf.Cdtr"
+  - "CdtTrfTxInf.PmtId.InstrId"
+  - "CdtTrfTxInf.PmtId.EndToEndId"
+  - "CdtTrfTxInf.IntrBkSttlmAmt"
+  - "CdtTrfTxInf.Cdtr"
   severity: error
+  rule_type: source_alternative_group_required
+  params:
+    alternative_groups:
+    - - "58A"
+      - "58D"
+    required_source_fields:
+    - "20"
+    - "21"
+    - "32A"
+  logic: >-
+    ENGINE FIX (v1.1): now machine-checked via rule_type, checked against the SOURCE message (parsedFields), not the
+    converted tree - mirrors the companion MT103 document's VR005/evalSourceAlternativeGroup() exactly. Previously this
+    rule was descriptive-only, and the actual enforcement (58A and 58D both marked mandatory:true on their individual
+    field_mappings entries) was itself broken - see the ENGINE FIX notes on both entries above: marking BOTH options
+    mandatory:true meant every message using only one of them would fail on the other's entry regardless of this rule.
 
 - rule_id: VR-202-04
   description: >-
@@ -1321,8 +1534,8 @@ validation_rules:
     serialization rather than emit a customer party missing its name. Mirrors the companion MT103 document's tightened
     VR006 for the analogous 50F/59F gap.
   applies_to:
-  - "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr"
-  - "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr"
+  - "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr"
+  - "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr"
   severity: error
 
 - rule_id: VR-202-05
@@ -1331,12 +1544,12 @@ validation_rules:
     source message. A plain MT202 must never produce a cover-payment shape; a genuine MT202COV must never produce a
     Document lacking UndrlygCstmrCdtTrf.
   applies_to:
-  - "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf"
+  - "CdtTrfTxInf.UndrlygCstmrCdtTrf"
   severity: error
   rule_type: presence_requires_presence
   params:
     source_trigger_field: "COV_FLAG"
-    target_path: "FICdtTrf.CdtTrfTxInf.UndrlygCstmrCdtTrf"
+    target_path: "CdtTrfTxInf.UndrlygCstmrCdtTrf"
 
 - rule_id: VR-202-06
   description: >-
@@ -1344,7 +1557,7 @@ validation_rules:
     available to the pipeline (even though not to this single-message mapping), it must be cross-checked for equality
     per the official Swift SR2018 rule that a cover payment's UETR must match its underlying customer transfer's UETR.
   applies_to:
-  - "FICdtTrf.CdtTrfTxInf.PmtId.UETR"
+  - "CdtTrfTxInf.PmtId.UETR"
   severity: error
 
 known_limitations:
@@ -1360,11 +1573,28 @@ known_limitations:
   is intentionally left unmapped - see scope_notes DEPRECATED-ELEMENT FINDING. Recommended next step: confirm the current
   live CBPR+ Translation Portal rule for 53a/54a institution content in pacs.009.001.08 before this gap is closed, rather
   than reviving the flagged-for-removal elements or inventing a new target."
-- "GENERATED:SttlmMtd's INDA/INGA rule is a conservative implementation default (absence of 53/54 -> INDA; presence ->
-  INGA), not a confirmed Swift Translation Portal algorithm. Unlike the companion MT103 document's COVE/INDA rule (which
-  had a documented presence/absence test even if the corridor-specific nuance needed verification), this document could
-  not find an unambiguous 'if X then INDA, if Y then INGA' rule for pacs.009 in the sources consulted - only that 53a/54a
-  relate to settlement method and account. Must be verified against actual corridor configuration before production use."
+- "POLICY CHANGE (v1.3, user-directed research 2026-09-01, supersedes the v1.2 fail-closed decision): SttlmMtd is now
+  populated as a constant 'INDA' via the GENERATED:SttlmMtd entry, grounded in two real worked examples from this
+  document's own primary source (the Bank of America SWIFT Reference Guide) - see that entry's notes and scope_notes'
+  SUPERSEDED DECISION HISTORY for the full citations and reasoning. RESIDUAL GAP (real, not closed by this change):
+  across all three authoritative sources reviewed for this document (Bank of America, Standard Chartered, BNY), no
+  worked example or concrete rule was found for when SttlmMtd should be INGA, COVE, or CLRG instead of INDA - only
+  INDA is ever demonstrated, whether 53a/54a is present or absent. This document will therefore emit INDA for every
+  MT202/MT202COV message, including any real-world scenario that genuinely requires a different settlement method.
+  This is a narrower and more precisely characterized limitation than v1.2's 'no source at all,' not a claim that the
+  gap is fully closed. If a deployment's traffic includes corridors that genuinely use INGA/COVE/CLRG, this constant
+  will silently produce the wrong value for those messages - closing that gap requires an equally concrete cited
+  worked example for the INGA/COVE/CLRG trigger condition, not inference."
+- >-
+  POLICY CHANGE (v1.2, user decision 2026-09-01): the Dbtr Sender-BIC fallback (used when 52A and 52D were both absent)
+  has been REMOVED for the same reason - it was grounded only in field 52a's textual usage rule ('Specifies the
+  ordering financial institution when other than the Sender of the message'), a logical inference rather than a cited
+  worked example (unlike the 52a-present case, which IS confirmed by a worked example: 52A BACXCZPPXXX -> outer Dbtr/
+  FinInstnId/BICFI BACXCZPPXXX). Dbtr is mandatory per CreditTransferTransaction36; with no 52A/52D and no fallback, it
+  is left unpopulated and the conversion is expected to be rejected by the schema completeness check rather than
+  inferring the ordering institution from MT header routing data. This is a deliberate reduction in this document's
+  practical coverage (fewer messages will convert successfully) in exchange for never inventing a transaction party
+  from data the message itself did not assert.
 - "Network validated rule C2 (governing when Sequence B's 57a becomes conditionally mandatory) is referenced by the
   official MT202COV format specification but this document did not independently derive or confirm C2's exact trigger
   logic. 57a in Sequence B is treated as optional-but-recommended, matching MT103's general 57a-absence rule, but the
@@ -1379,27 +1609,38 @@ known_limitations:
 - "56a Sequence B option C (party identifier/account only, no name, no BIC) and 57a Sequence B option C are not
   separately implemented - only options A/D (and B for 57a) are covered. An option-C-only value in either field is
   unresolved rather than guessed."
-- "ENGINE LIMITATION (v1.1, blocking): the 56A_seqB/56D_seqB/57A_seqB/57B_or_57C_or_57D_seqB entries above cannot fire
-  correctly for a real MT202COV message today, and this is NOT fixable inside this mapping document alone. Root cause:
-  MtParserService reads block 4 as a flat list of Tag(name, value) pairs and stores them in a single Map<String,String>
-  keyed by the literal SWIFT tag name (ParsedMessage.addField merges a REPEATED tag name by newline-joining its values
-  together under the one key) - it has no concept of 'this occurrence belongs to Sequence A, that one to Sequence B'.
-  An MT202COV message that carries, say, both a Sequence A 56A and a Sequence B 56A would have both raw values silently
-  concatenated under the single parsed field key '56A', and the Sequence A field_mappings entry (which reads that same
-  key) would only ever see - and only ever correctly parse - the first of the two, with the second discarded rather
-  than routed to UndrlygCstmrCdtTrf.IntrmyAgt1. The '_seqB'-suffixed entries can never receive a value at all, because
-  MtParserService never produces a key with that suffix. Practical effect: Sequence B content for 56a/57a on any
-  MT202COV message that ALSO populates the SAME tag/option letter in Sequence A is currently lost, not just unmapped -
-  a correctness gap, not just a coverage gap. Fixing this properly requires MtParserService to be extended with real
-  Sequence A / Sequence B boundary detection for MT202COV specifically (Sequence B begins at the mandatory 50a Ordering
-  Customer field) - either via Prowide's own MT202COV-aware parsing API (unverified against the exact Prowide version
-  pinned in pom.xml, since this environment has no Maven Central access to compile and check) or hand-rolled boundary
-  detection on the raw tag sequence, with the resulting Sequence B tags stored under distinctly-suffixed keys (e.g. the
-  '_seqB' convention this document already assumes exists). NOT built here - a parser-layer change of this kind was
-  judged too consequential to guess at without either compiling against the real Prowide API or a explicit decision on
-  approach; flagging for a decision rather than silently shipping unverified parsing logic. Until resolved: this
-  document should be treated as CORE (MT202, or MT202COV messages whose 56a/57a Sequence B does not duplicate a Sequence
-  A tag/option letter) - complete Sequence B coverage for MT202COV is NOT yet safe to rely on."
+- "ENGINE LIMITATION (v1.4 status, was v1.1): root cause unchanged - MtParserService reads block 4 as a flat list of
+  Tag(name, value) pairs in a single Map<String,String> keyed by literal SWIFT tag name (ParsedMessage.addField merges
+  a REPEATED tag name by newline-joining its values under the one key), with no concept of 'this occurrence belongs to
+  Sequence A, that one to Sequence B'. v1.4 FIX (live-test finding 2026-09-01): this was confirmed to be actively
+  breaking ordinary CORE MT202 conversions, not just a COV edge case - a plain message with an ordinary 52A would ALSO
+  populate this document's Sequence B entries (which read the same bare '52A' key with no gate at all), triggering
+  VR-202-05's rejection for completely valid CORE traffic. Fixed two ways: (1) every field_mappings entry writing into
+  UndrlygCstmrCdtTrf is now gated on COV_FLAG - either via transformation: conditional (for direct_copy-shaped entries:
+  50A/52A/59A/70, effective immediately, no rebuild needed) or by reading a new '<tag>_seqB' synthetic key that
+  MtParserService's SEQUENCE_B_MIRROR_TAGS now mirrors from the bare tag ONLY when COV_FLAG is present (for
+  decompose_party/llm_assisted-shaped entries: 50K/50F/52D/56A/56D/57A/57B/57D/59/59F/33B - these are safely INERT
+  until the Java change is compiled and deployed, a strict improvement over the prior live-collision state even before
+  rebuild). (2) the '57B_or_57C_or_57D_seqB' combined name (never reachable regardless of gating) was split into real
+  57B_seqB/57D_seqB entries, matching the fix already applied to the Sequence A equivalent. RESIDUAL GAP, NOT closed by
+  this fix: a GENUINE MT202COV that carries the SAME tag/option letter in BOTH Sequence A and Sequence B (e.g. two
+  separate 52A occurrences) will still have both raw values newline-joined under one key by ParsedMessage.addField
+  BEFORE the mirroring step ever runs - the mirror faithfully copies that already-corrupted joined value into the
+  '_seqB' key too. This fix eliminates the false-positive case (Sequence A tag alone, wrongly populating Sequence B)
+  but does NOT solve genuine dual-sequence duplication, which still requires real Sequence A/B boundary detection
+  (Sequence B begins at the mandatory 50a Ordering Customer field) - either via Prowide's own MT202COV-aware parsing
+  API (unverified against the exact Prowide version pinned in pom.xml, no Maven Central access to compile and check
+  here) or hand-rolled boundary detection on the raw tag sequence. NOT built here - judged too consequential to guess
+  at without either compiling against the real Prowide API or an explicit decision on approach. Until resolved: this
+  document is safe for CORE MT202 (no false Sequence B contamination) and for MT202COV messages whose Sequence
+  A/Sequence B option letters don't duplicate - a genuine duplicate-tag COV message remains an open, disclosed risk."
+- "MINOR DISCLOSED INCONSISTENCY (v1.4): the Sequence A 57B entry routes its identifier-only content to CdtrAgtAcct
+  (treating it as an account), while the Sequence B 57B_seqB entry (split from the original '57B_or_57C_or_57D_seqB'
+  placeholder) routes the equivalent content to CdtrAgt/FinInstnId/Othr/Id (treating it as an alternate identifier for
+  the agent itself) - the ORIGINAL, pre-existing Sequence B design choice was preserved rather than silently
+  harmonized with the Sequence A fix, since neither choice is independently sourced from a worked example and picking
+  one over the other would be exactly the kind of guessing this document avoids. Needs a real citation (for either
+  option's field-57-under-option-B semantics) to resolve one way or the other."
 - "13C time-indication conversion (the /HHMM[+/-]HHMM -> ISO 8601 offset procedure) currently requires an LLM-assisted
   workaround for the same class of reason field 32A's date conversion does in the companion MT103 document - no
   deterministic extract_subfield transformation exists yet. Recommended engineering follow-up: build one, shared across
@@ -1419,15 +1660,29 @@ sources_consulted:
   official_iso20022:
   - "pacs.009.001.08 (FinancialInstitutionCreditTransferV08) XSD, ISO 20022 Standards Editor output, targetNamespace urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08 - structural authority for this document, used to verify every element name, type, and cardinality cited above; delivered alongside this document as pacs.009.001.08.xsd."
   corroborative_implementation_evidence:
-  - "Bank of America 'SWIFT Reference Guide - Financial Institution Credit Transfer (PACS.009)', including a complete worked MT202COV -> pacs.009 COV example (used to confirm the outer-vs-nested Dbtr/Cdtr typing distinction, the field 20/21 -> MsgId/InstrId/EndToEndId mapping, the 52a/57a/58a -> Dbtr/CdtrAgt/Cdtr mapping at Sequence A level, the SttlmAcct/InstgRmbrsmntAgt 'to be removed' finding, and the 33B -> InstdAmt mapping): https://images.em.bankofamerica.com/GTS/ISO_20022/SWIFTReferenceGuideFinancialInstitutionCreditTransfer(PACS.009).pdf"
+  - "Bank of America 'SWIFT Reference Guide - Financial Institution Credit Transfer (PACS.009)', including a complete worked MT202COV -> pacs.009 COV example (used to confirm the outer-vs-nested Dbtr/Cdtr typing distinction, the field 20/21 -> MsgId/InstrId/EndToEndId mapping, the 52a/57a/58a -> Dbtr/CdtrAgt/Cdtr mapping at Sequence A level, the SttlmAcct/InstgRmbrsmntAgt 'to be removed' finding, and the 33B -> InstdAmt mapping). Re-read in full 2026-09-01 specifically for the SttlmMtd question: field 6 ('Sender's correspondent') gives a direct worked example ':53B:/BOFA-ACCT-1234' -> SttlmMtd=INDA + SttlmAcct, and the complete worked MT202COV example (with no 53a/54a present at all) likewise resolves to SttlmMtd=INDA - the two citations behind the v1.3 GENERATED:SttlmMtd entry: https://images.em.bankofamerica.com/GTS/ISO_20022/SWIFTReferenceGuideFinancialInstitutionCreditTransfer(PACS.009).pdf"
   - "Prowide Integrator translation release notes (implementation evidence, not a Swift Translation Portal substitute), confirming ongoing CBPR+ MT202/MT203 -> pacs.009 maintenance activity: https://dev.prowidesoftware.com/latest/release-notes/changelog-translations/"
+  - "Standard Chartered 'ISO 20022 message formatting guideline for pacs.009' (public CBPR+ implementation guide, retrieved 2026-09-01): https://www.sc.com/en/uploads/sites/66/content/docs/Standard-Chartered-ISO-20022-message-formatting-guideline-for-pacs-009.pdf - states SttlmMtd 'Can be INDA/INGA only' and defines both codes strictly in terms of Standard Chartered's OWN settlement account relationship ('Settlement Account held with Standard Chartered to be debited' for INDA), not as a value derivable from MT202 field content. Used as the primary evidence that SttlmMtd is a settlement-relationship/configuration value, not a message-content-derivable one."
+  - "BNY 'A Deep Dive on pacs.009' (February 2021, retrieved 2026-09-01): https://www.bny.com/assets/corporate/documents/pdf/iso-20022/learning-guide-module-5.pdf - confirms the four generic SettlementMethod1Code values (CLRG/COVE/INDA/INGA) with no derivation algorithm from MT202 fields, and separately confirms InstgRmbrsmntAgt/InstdRmbrsmntAgt (MT equivalent 53a/54a) are 'only available in pacs.009 ADV messages' - corroborating this document's existing DEPRECATED-ELEMENT FINDING that 53a/54a's institution-identifying content has no valid CORE/COV target."
   supplied_or_retrieved_for_this_review:
   - "pacs.009.001.08.xsd (retrieved from a public mirror of the official ISO 20022 Standards Editor output; see the XSD file's own provenance comment for retrieval details and verification steps taken)."
 
 important_limitation: >
+  v1.3 STATUS, READ FIRST (supersedes the v1.2 note below): the v1.2 fail-closed SttlmMtd position has been revised.
+  On the user's explicit direction to re-check this document's own primary worked-example source (the Bank of America
+  SWIFT Reference Guide) specifically, two real cited worked examples were found showing SttlmMtd resolving to INDA -
+  once with 53a present, once with 53a/54a both absent (see scope_notes SUPERSEDED DECISION HISTORY and the
+  GENERATED:SttlmMtd field_mappings entry for full citations). SttlmMtd is now populated as a constant "INDA". This
+  document CAN now convert a CORE MT202/MT202COV message end to end, PROVIDED Dbtr also resolves (52A or 52D present -
+  see the Dbtr entries and known_limitations for that separate, still-fail-closed gap, unchanged from v1.2). The
+  residual SttlmMtd gap: no source reviewed demonstrates any scenario resolving to INGA/COVE/CLRG, so this document
+  will emit INDA even for a real message that should genuinely receive a different value - this is disclosed, not
+  hidden, and closing it requires an equally concrete cited worked example for that trigger condition.
+
   As with the companion MT103 -> pacs.008 document: Swift states that the authoritative field-level MT<->MX translation
   rules are maintained in MyStandards / the Translation Portal. The sources above confirm the great majority of this
   mapping with a high degree of confidence (including a complete, consistent worked example), but a small number of
-  specific points - the SttlmMtd INDA/INGA trigger algorithm, network validated rule C2's exact condition, and the
-  field 103/111 -> SvcLvl/Cd lookup - could not be pinned down from publicly available material without guessing, and are
-  explicitly left unresolved in known_limitations rather than invented.
+  specific points - the INGA/COVE/CLRG trigger condition for SttlmMtd (the INDA case IS now confirmed by two cited
+  worked examples, see above), network validated rule C2's exact condition, and the field 103/111 -> SvcLvl/Cd lookup -
+  could not be pinned down from publicly available material without guessing, and are explicitly left unresolved in
+  known_limitations rather than invented.

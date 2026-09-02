@@ -1,8 +1,8 @@
 conversion_id: MT103_TO_PACS008
 source_format: MT103
 target_format: pacs.008.001.08
-version: "2.6"
-last_updated: "2026-08-31"
+version: "2.7"
+last_updated: "2026-09-01"
 scope_notes: >
   SWIFT MT103 -> pacs.008.001.08 mapping profile.
 
@@ -1162,7 +1162,242 @@ field_mappings:
   - condition: "MT header Receiver cannot be determined"
     handling: "not an error - InstdAgt is optional; this entry simply produces no value"
 
+# ============================================================================
+# v2.7 ADDITIONS - 13C, 23E, 77B (see known_limitations for full sourcing;
+# 26T deliberately NOT added - see the superseded known_limitations entry)
+# ============================================================================
+
+- source_field: "13C"
+  source_name: "Time Indication - SNDTIME (Sender's Time Stamp)"
+  target_path: "CdtTrfTxInf.SttlmTmIndctn.DbtDtTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: 13C was entirely absent from this document despite being a real, current, optional MT103 field -
+    confirmed present against pacs.008.001.08.xsd, which defines the identical SettlementDateTimeIndication1/
+    SettlementTimeRequest2 complex types under CreditTransferTransaction39 (lines 199-200, 926-931, 953-960) already
+    proven working in the companion MT202_TO_PACS00900108.yaml document's six 13C entries. Ported that exact
+    mechanism: field 13C is repetitive (multiple lines possible, newline-joined by this engine's field parser); scan
+    every line. If a line contains the codeword SNDTIME (format /SNDTIME/HHMM[+/-]HHMM), convert the HHMM+/-HHMM
+    portion to an ISO 8601 time-with-UTC-offset value and output ONLY that converted value. If no SNDTIME line
+    exists, output nothing (empty) - not an error (relies on this engine's existing "blank llm_assisted result =
+    skip silently" behavior). STRUCTURAL GAP (same as the MT202 doc's identical entry, not resolved here either):
+    DbtDtTm is typed ISODateTime (full date+time), but 13C's raw value carries ONLY a time - no sourced rule for
+    which date to combine it with (32A's value date and this conversion's own GENERATED:CreDtTm are both unconfirmed
+    candidates). Treat this entry as unverified pending that decision, distinct from the other five 13C entries
+    below (time-only ISOTime targets), which don't have this problem.
+  edge_cases:
+  - condition: "Field absent, or no SNDTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "SNDTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "13C"
+  source_name: "Time Indication - RNCTIME (Receiver's Time Stamp)"
+  target_path: "CdtTrfTxInf.SttlmTmIndctn.CdtDtTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword RNCTIME. Same STRUCTURAL GAP
+    as SNDTIME: CdtDtTm is also typed ISODateTime with no sourced date to combine with the time-only raw value.
+  edge_cases:
+  - condition: "Field absent, or no RNCTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "RNCTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "13C"
+  source_name: "Time Indication - CLSTIME (Cover Time / latest time by which cover must be received)"
+  target_path: "CdtTrfTxInf.SttlmTmReq.CLSTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword CLSTIME."
+  edge_cases:
+  - condition: "Field absent, or no CLSTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "CLSTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "13C"
+  source_name: "Time Indication - TILTIME (Till Time)"
+  target_path: "CdtTrfTxInf.SttlmTmReq.TillTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword TILTIME."
+  edge_cases:
+  - condition: "Field absent, or no TILTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "TILTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "13C"
+  source_name: "Time Indication - FROTIME (From Time)"
+  target_path: "CdtTrfTxInf.SttlmTmReq.FrTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword FROTIME."
+  edge_cases:
+  - condition: "Field absent, or no FROTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "FROTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "13C"
+  source_name: "Time Indication - REJTIME (Reject Time)"
+  target_path: "CdtTrfTxInf.SttlmTmReq.RjctTm"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword REJTIME. An unrecognized 7th+
+    codeword is a documented gap (see known_limitations); none of these six entries will match it, and no catch-all
+    entry exists, so it is silently not carried forward rather than rejected outright.
+  edge_cases:
+  - condition: "Field absent, or no REJTIME line present"
+    handling: "not an error - this entry produces no value"
+  - condition: "REJTIME line present but the time portion is not valid HHMM[+/-]HHMM"
+    handling: "reject - do not guess"
+
+- source_field: "23E"
+  source_name: "Instruction Code - Instruction3Code-enumerated values (CHQB/HOLD/PHOB/TELB, no trailing narrative)"
+  target_path: "CdtTrfTxInf.InstrForCdtrAgt.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: 23E was previously excluded entirely ("NOT MAPPED... No field_mappings entry" per the prior
+    known_limitations entry, now superseded). Reopened after directly reading the Bank of America MT103-to-pacs.008
+    formatting guide (images.em.bankofamerica.com/GTS/ISO_20022/PACS008andMT103commercialpaymentsformattingguide.pdf),
+    which gives a real worked example (:23E:CHQB -> <InstrForCdtrAgt><InstrInf>...) and shows 23E branches to one of
+    three possible targets depending on the code: InstrForCdtrAgt, PmtTpInf/SvcLvl/Cd, or PmtTpInf/CtgyPurp/Cd.
+    Rather than following that guide's own InstrInf-only rendering of the CHQB example, this entry was tightened
+    against the actual supplied XSD: InstructionForCreditorAgent1 (pacs.008.001.08.xsd) has its OWN closed-enum Cd
+    sub-element, Instruction3Code, restricted to exactly {CHQB, HOLD, PHOB, TELB} - the same four values shown in
+    the source guide's own 23E code-narrative table. Since these four MT codewords are lexically identical to the
+    four valid Cd enum values, writing the codeword directly into Cd (not InstrInf) is the more schema-precise
+    translation. DECISION PROCEDURE: if 23E's value is exactly one of CHQB/HOLD/PHOB/TELB with no trailing
+    "/narrative", write it verbatim to Cd and output nothing for the InstrInf/CtgyPurp entries below. Any other
+    codeword, or one of these four WITH trailing narrative, produces no value here (falls through to the InstrInf
+    entry below instead) - not an error.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - InstrForCdtrAgt is optional"
+  - condition: "Code is not one of CHQB/HOLD/PHOB/TELB, or carries trailing narrative"
+    handling: "not an error here - see the InstrInf entry below, which handles this case instead"
+
+- source_field: "23E"
+  source_name: "Instruction Code - non-enumerated codes and any code with trailing narrative"
+  target_path: "CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: paired with the Cd entry above; the two are mutually exclusive by design so a single 23E value
+    never populates both Cd and InstrInf redundantly. SWIFT's 23E codeset also includes PHOI, PHON, REPA, RTGS,
+    TELE, and TELI (per the official Swift MT103 field 23E code list), none of which are valid values of this XSD's
+    Instruction3Code enum ({CHQB, HOLD, PHOB, TELB} only) - writing them into Cd would fail XSD enumeration
+    validation. InstrInf is Max140Text (free text, no enum restriction), so this entry is the correct target for any
+    codeword outside that four-value set, and for any of the four WITH trailing narrative (e.g. "TELI/3226553478",
+    matching the source guide's own second worked example). DECISION PROCEDURE: if 23E does NOT match the Cd
+    entry's condition above (i.e. it is not exactly one of CHQB/HOLD/PHOB/TELB with no narrative) AND is not one of
+    SDVA/INTC/CORT (see the CtgyPurp entry below), copy the full raw 23E value verbatim into InstrInf.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - InstrForCdtrAgt is optional"
+  - condition: "Value exceeds 140 characters"
+    handling: "reject - do not truncate"
+
+- source_field: "23E"
+  source_name: "Instruction Code - SDVA/INTC/CORT (recognized ISO 20022 external category-purpose codes)"
+  target_path: "CdtTrfTxInf.PmtTpInf.CtgyPurp.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: the third of the source guide's three possible 23E targets. SDVA (Same Day Value), INTC
+    (Intra-Company Payment), and CORT (Trade Settlement Payment) are established ISO 20022 external
+    category-purpose codes independently of this specific translation guide - CtgyPurp/Cd (ExternalCategoryPurpose1Code)
+    is an open 1-4 character code in this XSD, so no closed enumeration blocks this. DECISION PROCEDURE: if 23E's
+    value is exactly SDVA, INTC, or CORT, write it verbatim to CtgyPurp/Cd (and the InstrInf entry above produces no
+    value for this same message). RESIDUAL GAP (see known_limitations): the source guide also shows a
+    PmtTpInf/SvcLvl/Cd target as a fourth theoretical destination for 23E, but never gives a worked example of which
+    code triggers it - not implemented here; a 23E code that isn't CHQB/HOLD/PHOB/TELB/SDVA/INTC/CORT falls through
+    to the InstrInf entry above by default, which is a safe (no data loss) but possibly imprecise destination for
+    such a code.
+  edge_cases:
+  - condition: "Field absent, or code is not SDVA/INTC/CORT"
+    handling: "not an error here - see the other two 23E entries above"
+
+- source_field: "77B"
+  source_name: "Regulatory Reporting - reporting-side indicator (ORDERRES=debtor / BENEFRES=creditor)"
+  target_path: "CdtTrfTxInf.RgltryRptg#0.DbtCdtRptgInd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: 77B was previously excluded ("Excluded from field_mappings; candidate for a follow-up once
+    forward-direction samples exist" per the prior known_limitations entry, now superseded). Reopened after directly
+    reading the same Bank of America MT103-to-pacs.008 formatting guide, which gives a genuine forward-direction
+    worked example: ":77B:/BENEFRES/CA" -> a populated RgltryRptg element - stronger evidence than this document
+    previously had (which was Creditor-side-only and reverse-inferred from pacs.008 samples in a different source).
+    Confirmed directly against pacs.008.001.08.xsd: RgltryRptg is type RegulatoryReporting3 =
+    {DbtCdtRptgInd (enum: CRED/DEBT/BOTH), Authrty, Dtls[] (Tp/Dt/Ctry/Cd/Amt/Inf[])} - NOT the flat
+    <RgltryRptg><Inf>...</Inf></RgltryRptg> shape the source guide's own illustrative XML implies (that rendering
+    does not match this document's supplied XSD and is not followed here). /ORDERRES/ and /BENEFRES/ are the two
+    standard 77B codewords for "regulatory reporting concerns the Orderer/Debtor" and "...the Beneficiary/Creditor"
+    respectively - the well-documented SWIFT pairing that DbtCdtRptgInd's DEBT/CRED enum values exist specifically
+    to express. DECISION PROCEDURE: if a 77B line begins with /ORDERRES/, write DEBT; if it begins with /BENEFRES/,
+    write CRED; any other or absent codeword produces no value for this entry (the Inf entry below still captures
+    the raw text regardless). "#0" marks the first (and, in this version, only) RgltryRptg occurrence - RgltryRptg
+    is maxOccurs=10 in the XSD but 77B's realistic multi-line repetition is not handled by this version; see
+    known_limitations.
+  edge_cases:
+  - condition: "Field absent, or no line starts with /ORDERRES/ or /BENEFRES/"
+    handling: "not an error - DbtCdtRptgInd is optional; see the Inf entry below, which still captures the raw text"
+
+- source_field: "77B"
+  source_name: "Regulatory Reporting - country-of-residence code (the 2 letters immediately following the codeword)"
+  target_path: "CdtTrfTxInf.RgltryRptg#0.Dtls.Ctry"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.7 GAP FIX: paired with the DbtCdtRptgInd entry above - identical codeword detection. Matches the source
+    guide's own worked example (":77B:/BENEFRES/CA" - "CA" is a 2-letter ISO country code), which fits Dtls/Ctry's
+    CountryCode datatype ([A-Z]{2} pattern) exactly. DECISION PROCEDURE: if a 77B line begins with /ORDERRES/xx or
+    /BENEFRES/xx where xx is exactly 2 uppercase letters, output xx; otherwise produce no value.
+  edge_cases:
+  - condition: "Field absent, or the codeword is present but not immediately followed by a 2-letter uppercase code"
+    handling: "not an error - Ctry is optional; the Inf entry below still captures the full raw line regardless"
+
+- source_field: "77B"
+  source_name: "Regulatory Reporting - full raw line (verbatim fallback, no interpretation)"
+  target_path: "CdtTrfTxInf.RgltryRptg#0.Dtls.Inf"
+  mandatory: false
+  transformation: direct_copy
+  notes: >-
+    v2.7 GAP FIX: unconditional companion to the two entries above - copies the COMPLETE raw 77B line (codeword,
+    country code, and any trailing free text) verbatim into Dtls/Inf regardless of whether it matched the
+    ORDERRES/BENEFRES pattern. This is deliberately the safe, no-guess fallback: if a real message uses a 77B
+    convention this document doesn't recognize, the content is still preserved as free text rather than silently
+    dropped, while DbtCdtRptgInd/Ctry simply stay unpopulated for that message. Runs unconditionally alongside the
+    two entries above (not mutually exclusive with them) - Dtls/Inf and DbtCdtRptgInd/Ctry are sibling elements, so
+    having both the structured indicator AND the preserved raw text is valid and intentional, not redundant.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - RgltryRptg is optional"
+  - condition: "Value exceeds 35 characters (Dtls/Inf is Max35Text)"
+    handling: "reject - do not truncate; a future version may need to split a long line across multiple Inf occurrences"
+
 known_limitations:
+- "v2.7 CHANGELOG NOTE: added 13C (six entries, mirroring the already-proven MT202_TO_PACS00900108.yaml pattern -
+  confirmed pacs.008.001.08.xsd has the identical SettlementDateTimeIndication1/SettlementTimeRequest2 structure),
+  23E (three entries: Cd for the Instruction3Code-enumerated CHQB/HOLD/PHOB/TELB, CtgyPurp/Cd for SDVA/INTC/CORT,
+  InstrInf as the free-text fallback for everything else), and 77B (three entries: DbtCdtRptgInd derived from the
+  ORDERRES/BENEFRES codeword, Dtls/Ctry for the trailing 2-letter country code, Dtls/Inf as an unconditional raw-text
+  fallback). 23E and 77B were reopened after directly reading the primary source already cited for this document's
+  53A/54A/55A entries (the Bank of America MT103-to-pacs.008 formatting guide) rather than relying on a
+  secondhand/search-engine summary of it - that guide gives real worked forward-direction examples for both fields
+  (:23E:CHQB, :77B:/BENEFRES/CA), stronger evidence than this document previously required to exclude them (see the
+  superseded 23E/77B entries below, kept for history). 26T was NOT added: the same primary source states verbatim,
+  'The field is not processed by Bank of America' - a real bank's production implementation explicitly skipping the
+  field is evidence FOR continued exclusion, not against it, even though the schema does have a structural Purp
+  target for it (see the superseded 26T entry below). 51A remains excluded - the source guide does not mention it at
+  all, so 'no evidence found either way' still stands unchanged."
 - "v2.6 CHANGELOG NOTE: 71F/71G were reverted to 'unsupported' (hard reject) by an intervening edit, undoing this session's earlier 'skip_with_warning' decision - but on being asked to explain the underlying gap rather than just pick between reject/skip, found a real fix instead of either. SWIFT's own field definitions are specific about the charging agent: field 71F is 'charges deducted BY THE SENDER', field 71G is 'charges to be deducted BY THE RECEIVER' - so the Agt Charges7 requires is not actually undeterminable, it's the MT header Sender (for 71F) / Receiver (for 71G), both already available as __MT_SENDER_BIC__/__MT_RECEIVER_BIC__. Rebuilt as three entries each (currency via extract_pattern+direct_copy+allowed_pattern, amount via extract_pattern+decimal_comma_to_dot, agent via the existing conditional/if_any_present_field/skip_if_none_present mechanism keyed on the SAME field's own presence) - mirrors the 32A/33B composite-extraction pattern. Uses '#0'/'#1' (ChrgsInf is maxOccurs=unbounded) so a message with BOTH 71F and 71G produces two distinct occurrences rather than one overwriting the other. Removed the now-dead 'unsupported' transformation type's only two callers - the engine capability itself (TransformationEngine.unsupported/ConverterService) is left in place for any future genuinely-unfixable gap, just unused in this document for now."
 - "v2.5 CHANGELOG NOTE (decisions recorded, no code/mapping change): two items had been raised repeatedly across several review passes (v2.1 through v2.3) without a final answer, re-litigating the same ground each time. User explicitly decided both this round (2026-08-31), recorded here so a future review doesn't re-open them without new information: (1) EndToEndId KEEPS the existing UHB p.209-cited NOTPROVIDED default (from /ROC/ in field 70 when present, else NOTPROVIDED) - the field-20-reuse alternative proposed in several reviews is explicitly NOT adopted; do not silently switch this again without a fresh explicit decision, since it directly overrides a cited source. (2) The Envelope/AppHdr (head.001.001.01) wrapper stays OUT OF SCOPE for now, consistent with the original v1.0 scope_notes exclusion - this converter continues to emit a bare pacs.008 Document payload, not a full SWIFT-transmittable envelope. If this is needed later, the open question is which network's BizSvc identifier applies (this document targets CBPR+ per the v2.1 profile decision, not TARGET2)."
 - "v2.4 CHANGELOG NOTE (ENGINE FIX): fixed VR008 firing unconditionally - its own description explicitly scopes it to 'if converted after 14 November 2026', but the v2.2 implementation had no date-gating at all, so it incorrectly hard-failed conversions run today (2026-08-31), months before its stated effective date. Added evalStructuredAddress() date-gating: params.effective_date (ISO yyyy-MM-dd) - the rule doesn't apply at all (not even a warning) until the current date reaches it. VR008's own params now sets effective_date: '2026-11-14', matching its description. A malformed/unparseable effective_date fails safe (rule treated as not yet active, not as a crash or an unconditional enforcement)."
@@ -1322,17 +1557,22 @@ known_limitations:
   what's actually mapped."
 - "M/O status: no MT103 FIN spec attached, so no field's mandatory flag can be certified - all set to false with a note, including
   20/32A/71A which are almost certainly mandatory in reality."
-- "23E Instruction Code: unresolved. NOT MAPPED in the MT103-to-pacs.004 and MT104-to-pacs.003 tables. The MT101-to-pacs.008
-  table (different message type) does NOT flag it NOT MAPPED and places it near Category Purpose/Instruction For Creditor
-  Agent, but that's not a valid MT103 citation. No field_mappings entry."
-- "26T Transaction Type Code: no evidence for MT103-to-pacs.008 in any attached document. NOT MAPPED in MT104-to-pacs.003
-  (different pair); absent from the MT101-to-pacs.008 table entirely. No field_mappings entry."
-- "51A Sending Institution: no evidence found either way in any attached document."
-- "77B Regulatory Reporting: no UHB citation, but real sample evidence exists - comparing pacs.008 samples TRAK (has Cdtr/CtryOfRes=US)
-  vs TROK (doesn't), only TRAK's translated MT contains ':77B:/BENEFRES/US'. Genuine same-pair evidence, but reverse-direction,
-  and only the Creditor-side (/BENEFRES/) half was observed - the Debtor-side (/ORDERRES/) equivalent is inferred by symmetry
-  only, and the full RgltryRptg structure beyond the codeword is unevidenced. Excluded from field_mappings; candidate for
-  a follow-up once forward-direction samples exist."
+- "SUPERSEDED (v2.7 - see the v2.7 CHANGELOG NOTE above) - 23E Instruction Code: unresolved. NOT MAPPED in the
+  MT103-to-pacs.004 and MT104-to-pacs.003 tables. The MT101-to-pacs.008 table (different message type) does NOT flag
+  it NOT MAPPED and places it near Category Purpose/Instruction For Creditor Agent, but that's not a valid MT103
+  citation. No field_mappings entry. [Kept for history only - three field_mappings entries now exist for 23E.]"
+- "26T Transaction Type Code: STILL excluded as of v2.7, but the reasoning was upgraded from 'no evidence' to a
+  confirmed direct citation - see the v2.7 CHANGELOG NOTE above. Original v1.x reasoning (kept for history): no
+  evidence for MT103-to-pacs.008 in any attached document. NOT MAPPED in MT104-to-pacs.003 (different pair); absent
+  from the MT101-to-pacs.008 table entirely. No field_mappings entry."
+- "51A Sending Institution: no evidence found either way in any attached document. Re-checked in v2.7 against the
+  Bank of America MT103-to-pacs.008 guide specifically - still not mentioned there either. Still excluded."
+- "SUPERSEDED (v2.7 - see the v2.7 CHANGELOG NOTE above) - 77B Regulatory Reporting: no UHB citation, but real sample
+  evidence exists - comparing pacs.008 samples TRAK (has Cdtr/CtryOfRes=US) vs TROK (doesn't), only TRAK's translated
+  MT contains ':77B:/BENEFRES/US'. Genuine same-pair evidence, but reverse-direction, and only the Creditor-side
+  (/BENEFRES/) half was observed - the Debtor-side (/ORDERRES/) equivalent was inferred by symmetry only, and the
+  full RgltryRptg structure beyond the codeword was unevidenced. [Kept for history only - three field_mappings
+  entries now exist for 77B, grounded in a stronger forward-direction source.]"
 - "Decimal reformatting (MT comma -> XML dot): CORRECTED in v1.11 - this note (and the 36/XchgRate entry that acted on it)
   previously claimed no matching transformation type existed in this schema's enum. That was wrong: decimal_comma_to_dot has
   existed in TransformationEngine all along. All amount-bearing entries (32A, 33B, 36) now use it via extract_pattern + decimal_comma_to_dot
