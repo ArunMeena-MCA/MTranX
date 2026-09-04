@@ -26,6 +26,17 @@ public class XsdIndexRegistry {
         this.props = props;
     }
 
+    /**
+     * Drops the cached entry for a format so the next {@link #get} call
+     * re-reads it from disk - needed after a runtime XSD upload/overwrite
+     * replaces a file whose format string was already queried and cached
+     * (including cached as absent), which {@code computeIfAbsent} alone
+     * would otherwise keep serving indefinitely.
+     */
+    public void evict(String targetFormat) {
+        cache.remove(targetFormat);
+    }
+
     public Optional<XsdOrderingIndex> get(String targetFormat) {
         return cache.computeIfAbsent(targetFormat, fmt -> {
             if (props.getXsdDir() == null || props.getXsdDir().isBlank()) {

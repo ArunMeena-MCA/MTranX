@@ -166,6 +166,48 @@ public class TransformationEngine {
         return matcher.groupCount() > 0 ? matcher.group(1) : matcher.group();
     }
 
+    private static final Pattern TIME_OFFSET = Pattern.compile("^(\\d{2})(\\d{2})([+-])(\\d{2})(\\d{2})$");
+
+    /**
+     * MT field 13C's time-indication value, after extract_pattern has
+     * already pulled out just the "HHMM[+-]HHMM" portion following this
+     * entry's own codeword (e.g. "0915+0100"), reformatted to the
+     * ISOTime lexical form pacs.008's SttlmTmReq/CLSTm|TillTm|FrTm|RjctTm
+     * elements require ("09:15:00+01:00"). Deterministic fixed-width
+     * reformatting, not a judgement call - matches this document's
+     * stated preference for exact operations over LLM calls (see the
+     * 32A currency-extraction entry's identical rationale). Confirmed
+     * against the real SWIFT MT103 field spec's own format definition
+     * for 13C ("/8c/4!n1!x4!n" - a 4-digit time, a sign, a 4-digit
+     * offset), so this is not a guessed shape.
+     */
+    public String timeOffsetFormat(String value, FieldMapping fm) {
+        Matcher m = TIME_OFFSET.matcher(value);
+        if (!m.matches()) {
+            throw new TransformationException("Value '" + value + "' for field " + fm.getSourceField()
+                    + " is not a valid HHMM[+-]HHMM time-with-offset.");
+        }
+        return m.group(1) + ":" + m.group(2) + ":00" + m.group(3) + m.group(4) + ":" + m.group(5);
+    }
+
+    /**
+     * Companion to timeOffsetFormat above, for the two 13C entries whose
+     * pacs.008 target (SttlmTmIndctn/DbtDtTm|CdtDtTm) is a full
+     * ISODateTime, not a bare ISOTime - see FieldMapping.dateFromTargetPath's
+     * Javadoc for why a date has to come from elsewhere in the converted
+     * tree. Combines dateFromTargetPath's ALREADY-CONVERTED ISODate value
+     * (YYYY-MM-DD) with this entry's own reformatted time-with-offset via a
+     * literal "T", per ISO 8601's standard date-time separator.
+     */
+    public String settlementDateTimeFromTimeOffset(String value, FieldMapping fm, String datePart) {
+        if (datePart == null) {
+            throw new TransformationException("Field " + fm.getSourceField() + " requires "
+                    + fm.getDateFromTargetPath() + " to already be populated (date_from_target_path), but it wasn't "
+                    + "- check field_mappings ordering.");
+        }
+        return datePart + "T" + timeOffsetFormat(value, fm);
+    }
+
     /**
      * SWIFT amount convention: a trailing comma with nothing after it
      * (e.g. "116,") means a whole-number amount, not malformed input -

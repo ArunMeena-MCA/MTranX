@@ -21,6 +21,17 @@ public class AppProperties {
     private String geminiApiKey;
     private String groqApiKey;
 
+    /**
+     * Opt-in: structured address enrichment (StrtNm/TwnNm/Ctry from free-text
+     * AdrLine content, via the libpostal sidecar service) is OFF by default -
+     * existing deployments that haven't stood up the sidecar keep today's
+     * AdrLine-only behavior unchanged. Enable ahead of the 14 November 2026
+     * Swift structured/hybrid address requirement (see
+     * MT103_TO_PACS00800108.yaml's ADDRESS POLICY note).
+     */
+    private boolean addressParserEnabled = false;
+    private String addressParserUrl = "http://localhost:8090/parse-address";
+
     public String getMappingsDir() {
         return mappingsDir;
     }
@@ -83,5 +94,21 @@ public class AppProperties {
 
     public void setGroqApiKey(String groqApiKey) {
         this.groqApiKey = groqApiKey;
+    }
+
+    public boolean isAddressParserEnabled() {
+        return addressParserEnabled;
+    }
+
+    public void setAddressParserEnabled(boolean addressParserEnabled) {
+        this.addressParserEnabled = addressParserEnabled;
+    }
+
+    public String getAddressParserUrl() {
+        return addressParserUrl;
+    }
+
+    public void setAddressParserUrl(String addressParserUrl) {
+        this.addressParserUrl = addressParserUrl;
     }
 }

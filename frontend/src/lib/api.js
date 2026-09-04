@@ -41,3 +41,60 @@ export async function convertMessage({ rawText, sourceFormat, targetFormat }) {
 
   return body;
 }
+
+/** GET /api/mappings/check - cheap existence preview, no file upload. */
+export async function checkMappingExists({ sourceFormat, targetFormat }) {
+  const params = new URLSearchParams({ source_format: sourceFormat, target_format: targetFormat });
+  const res = await fetch(`${API_BASE}/api/mappings/check?${params}`);
+  if (!res.ok) {
+    throw new Error("Could not check existing mappings.");
+  }
+  return res.json();
+}
+
+/**
+ * POST /api/mappings/upload - registers a new (or overwrites an existing)
+ * MT<->MX conversion. Same structured-error shape as convertMessage() on
+ * failure, including the "upload" stage / MappingUploadConflictException
+ * case that means "resubmit with confirm: true".
+ */
+export async function uploadMapping({
+  direction,
+  sourceFormat,
+  targetFormat,
+  mappingFile,
+  xsdFile,
+  confirm,
+}) {
+  const formData = new FormData();
+  formData.append("direction", direction);
+  formData.append("source_format", sourceFormat);
+  formData.append("target_format", targetFormat);
+  formData.append("mapping_file", mappingFile);
+  if (xsdFile) {
+    formData.append("xsd_file", xsdFile);
+  }
+  formData.append("confirm", confirm ? "true" : "false");
+
+  // Deliberately no Content-Type header - fetch sets the multipart
+  // boundary itself from the FormData body; setting it manually breaks it.
+  const res = await fetch(`${API_BASE}/api/mappings/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const detail = body?.detail || {};
+    const err = new Error(detail.message || "Upload failed.");
+    err.stage = detail.stage || "unknown";
+    err.errorType = detail.error_type || "Error";
+    err.missing = detail.missing || null;
+    err.errors = detail.errors || null;
+    err.warnings = detail.warnings || null;
+    throw err;
+  }
+
+  return body;
+}

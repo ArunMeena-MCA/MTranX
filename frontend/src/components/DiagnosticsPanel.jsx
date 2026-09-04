@@ -3,6 +3,7 @@ const STAGE_HEADLINES = {
   parse: "Couldn't read this message",
   convert: "Conversion stopped",
   validate: "Validation failed",
+  upload: "Mapping upload failed",
   unknown: "Conversion failed",
 };
 

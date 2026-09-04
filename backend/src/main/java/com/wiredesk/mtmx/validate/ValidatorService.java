@@ -78,6 +78,29 @@ public class ValidatorService {
         this.xsdIndexRegistry = xsdIndexRegistry;
     }
 
+    /**
+     * Fail-fast precondition check: evaluates every source_alternative_group_required
+     * validation_rule against the PARSED SOURCE message only, before any
+     * conversion attempt. Purely source-side rule shape (checks parsedFields,
+     * never the converted tree), so it's safe to run this early - unlike the
+     * other rule_types (currency mismatch, mutual exclusion, ...), which need
+     * the converted output and can only be evaluated after ConverterService
+     * has run. Returns an empty list when every such rule passes.
+     */
+    public List<String> checkMandatorySourceFields(Map<String, String> parsedFields, MappingDocument doc) {
+        List<String> problems = new ArrayList<>();
+        for (ValidationRule rule : doc.getValidationRules()) {
+            if (!"source_alternative_group_required".equals(rule.getRuleType())) {
+                continue;
+            }
+            String failureDetail = evalSourceAlternativeGroup(rule.getParams(), parsedFields);
+            if (failureDetail != null) {
+                problems.add("[" + rule.getRuleId() + "] " + rule.getDescription() + " - " + failureDetail);
+            }
+        }
+        return problems;
+    }
+
     public ValidationReport validate(Map<String, String> parsedFields, ConvertedMessage converted, MappingDocument doc) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>(converted.getConversionWarnings());
@@ -194,6 +217,23 @@ public class ValidatorService {
                     .orElse(null);
 
             if (fm.isMandatory() && value == null) {
+                // BUG FIX (2026-09-04, from live test case TC20): a conditional-transformation
+                // entry's own mandatory:true flag used to be checked completely blind to whether
+                // its OWN conditional logic had ALREADY, deliberately decided to skip - e.g.
+                // __MT_SENDER_BIC__ -> DbtrAgt.FinInstnId.BICFI is mandatory:true with
+                // skip_if_any_present on check_fields ["52A","52D"], meaning "I fire only when
+                // NEITHER 52A NOR 52D supplied an alternate identification for DbtrAgt." A
+                // message with 52D present (option D: name/address, no BIC - a fully valid MT103
+                // per the SWIFT field spec) correctly made this entry skip via
+                // TransformationEngine.conditional()'s own skip_if_any_present logic - but this
+                // check then treated that intentional, correct skip as "the mandatory field never
+                // got populated," hard-rejecting an entirely valid message. If a conditional
+                // entry's own skip condition fired, some OTHER entry (here, 52D's own
+                // decompose_party, which writes FinInstnId/Nm + PstlAdr/AdrLine instead of
+                // BICFI) is responsible for that branch - not this one - so it is not a real gap.
+                if (isConditionalSkip(fm, parsedFields)) {
+                    continue;
+                }
                 errors.add("Mandatory target field '" + targetPath + "' (from source '" + fm.getSourceField()
                         + "') is missing from the converted output.");
                 continue;
@@ -305,6 +345,29 @@ public class ValidatorService {
     }
 
     /**
+     * True if this "conditional" entry's own check_fields presence matches
+     * one of its skip conditions - i.e. TransformationEngine.conditional()
+     * would deliberately produce nothing for this entry, by design, not by
+     * failure. Mirrors that method's own anyPresent/skip logic exactly, so
+     * the mandatory-field check above agrees with what actually happened
+     * during conversion instead of re-deriving a different answer. Only
+     * meaningful for transformation=conditional entries; returns false for
+     * anything else (a non-conditional mandatory entry with a null value is
+     * always a real gap, never a designed skip).
+     */
+    private boolean isConditionalSkip(FieldMapping fm, Map<String, String> parsedFields) {
+        if (!"conditional".equals(fm.getTransformation()) || fm.getConditional() == null) {
+            return false;
+        }
+        var rule = fm.getConditional();
+        if (rule.getCheckFields().isEmpty()) {
+            return false;
+        }
+        boolean anyPresent = rule.getCheckFields().stream().anyMatch(parsedFields::containsKey);
+        return (anyPresent && rule.isSkipIfAnyPresent()) || (!anyPresent && rule.isSkipIfNonePresent());
+    }
+
+    /**
      * Dispatches to a known machine-checkable rule shape by rule_type, or
      * falls back to the legacy free-text "A equals B" pattern for rules
      * without one. Returns null when the rule passed, doesn't apply to
@@ -329,8 +392,16 @@ public class ValidatorService {
             case "mutual_exclusion" -> evalMutualExclusion(p, tree);
             case "source_alternative_group_required" -> evalSourceAlternativeGroup(p, parsedFields);
             case "currency_precision_check" -> evalCurrencyPrecision(p, tree);
+            case "amount_not_zero" -> evalAmountNotZero(p, tree);
             case "structured_address_required" -> evalStructuredAddress(p, tree);
             case "presence_requires_presence" -> evalPresenceRequiresPresence(p, parsedFields, tree);
+            case "target_presence_requires_target_presence" -> evalTargetPresenceRequiresTargetPresence(p, tree);
+            case "source_presence_requires_source_presence" -> evalSourcePresenceRequiresSourcePresence(p, parsedFields);
+            case "value_forbids_presence" -> evalValueForbidsPresence(p, parsedFields);
+            case "value_requires_target_presence" -> evalValueRequiresTargetPresence(p, parsedFields, tree);
+            case "source_presence_requires_target_presence" -> evalSourcePresenceRequiresTargetPresence(p, parsedFields, tree);
+            case "source_format_forbidden_pattern" -> evalSourceFormatForbiddenPattern(p, parsedFields);
+            case "target_value_forbidden_set" -> evalTargetValueForbiddenSet(p, tree);
             default -> null;
         };
     }
@@ -361,6 +432,196 @@ public class ValidatorService {
         }
         if (!triggerPresent && targetPresent) {
             return targetPath + " is populated but source field '" + triggerField + "' is absent - should not have been produced";
+        }
+        return null;
+    }
+
+    /**
+     * VR014 shape: ONE-DIRECTIONAL variant of presence_requires_presence
+     * above - "if source_trigger_field is present, target_path must be
+     * present," with NO reverse check. Needed specifically because more
+     * than one source field can legitimately populate the SAME target path
+     * through different mechanisms (e.g. field 59F's deterministic
+     * numbered-line regex AND bare field 59's opt-in libpostal
+     * structured_address enrichment can both write
+     * CdtTrfTxInf.Cdtr.PstlAdr.Ctry) - the bidirectional check above would
+     * incorrectly flag a perfectly valid bare-59-plus-successful-libpostal
+     * message as "target populated but trigger field absent," since 59F
+     * specifically wasn't the one that populated it that time.
+     */
+    private String evalSourcePresenceRequiresTargetPresence(Map<String, Object> p, Map<String, String> parsedFields, Map<String, String> tree) {
+        String triggerField = (String) p.get("source_trigger_field");
+        String targetPath = (String) p.get("target_path");
+        if (triggerField == null || targetPath == null) {
+            return null;
+        }
+        if (parsedFields.containsKey(triggerField) && !presentUnder(tree, targetPath)) {
+            return "source field '" + triggerField + "' is present but " + targetPath + " was not populated";
+        }
+        return null;
+    }
+
+    /**
+     * VR015 shape (2026-09-04, from live test case TC48): a raw SOURCE
+     * field's value must not match a given regex - e.g. SWIFT rule T26
+     * for reference-type fields (must not start or end with '/' and must
+     * not contain '//' anywhere). Generic on source_field/forbidden_pattern
+     * rather than hardcoded to field 20, since T26 applies to several
+     * MT103 reference fields in principle, even though only field 20 has
+     * a rule wired to it in this version.
+     */
+    private String evalSourceFormatForbiddenPattern(Map<String, Object> p, Map<String, String> parsedFields) {
+        String field = (String) p.get("source_field");
+        String forbidden = (String) p.get("forbidden_pattern");
+        if (field == null || forbidden == null) {
+            return null;
+        }
+        String value = parsedFields.get(field);
+        if (value == null) {
+            return null;
+        }
+        if (Pattern.compile(forbidden).matcher(value).find()) {
+            return "source field '" + field + "' value '" + value + "' violates the required format (matches forbidden pattern " + forbidden + ")";
+        }
+        return null;
+    }
+
+    /**
+     * VR016 shape (2026-09-04, from live test case TC49): a converted
+     * TARGET path's value must not be one of a fixed forbidden set - e.g.
+     * MT103 field 32A's currency must not be a precious-metal ISO 4217
+     * code (XAU/XAG/XPD/XPT), which are valid currency codes in general
+     * but are not eligible for an interbank funds-transfer settlement
+     * amount. Case-insensitive on the stored value for robustness, though
+     * every upstream currency entry in this document already enforces
+     * uppercase via allowed_pattern.
+     */
+    private String evalTargetValueForbiddenSet(Map<String, Object> p, Map<String, String> tree) {
+        String targetPath = (String) p.get("target_path");
+        Object forbiddenObj = p.get("forbidden_values");
+        if (targetPath == null || !(forbiddenObj instanceof List<?> forbidden)) {
+            return null;
+        }
+        String value = tree.get(targetPath);
+        if (value == null) {
+            return null;
+        }
+        for (Object fv : forbidden) {
+            if (value.equalsIgnoreCase(String.valueOf(fv))) {
+                return targetPath + " value '" + value + "' is in the forbidden set for this field";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * VR010 shape: two TARGET tree paths must be either both present or
+     * both absent - e.g. MT field 50a's "Number 4 [Date of Birth] must not
+     * be used without number 5 [Place of Birth] and vice versa." Distinct
+     * from presence_requires_presence above: that rule compares a whole
+     * top-level SOURCE MT tag's presence against ONE target path: this one
+     * compares two TARGET paths against each other, for pairing rules
+     * between two numbered sub-lines of the SAME source field (e.g. 50a's
+     * "4/" and "5/"), where there is no separate top-level source tag for
+     * either side to key off via parsedFields.
+     */
+    private String evalTargetPresenceRequiresTargetPresence(Map<String, Object> p, Map<String, String> tree) {
+        String pathA = (String) p.get("target_path_a");
+        String pathB = (String) p.get("target_path_b");
+        if (pathA == null || pathB == null) {
+            return null;
+        }
+        boolean aPresent = presentUnder(tree, pathA);
+        boolean bPresent = presentUnder(tree, pathB);
+        if (aPresent != bPresent) {
+            return pathA + " present=" + aPresent + " but " + pathB + " present=" + bPresent
+                    + " - these must either both be present or both be absent";
+        }
+        return null;
+    }
+
+    /**
+     * VR012 shape: MT rule "if trigger_field is present, at least one of
+     * required_any_of must ALSO be present" - e.g. Rule C9, "if field 56a
+     * is present, field 57a must also be present" (57D counts too, since
+     * 57a covers both options at the source-field level). Distinct from
+     * source_alternative_group_required (VR005): that one has NO trigger,
+     * it always requires the group; this one only requires the group WHEN
+     * the trigger fires. Checked purely against parsedFields (source-side),
+     * matching VR005's own "check the source, not the derived target"
+     * reasoning - deliberately not a target-presence check, since some
+     * required_any_of members (e.g. 57A vs 57D) route to overlapping
+     * target paths and a target-side check couldn't distinguish them.
+     */
+    @SuppressWarnings("unchecked")
+    private String evalSourcePresenceRequiresSourcePresence(Map<String, Object> p, Map<String, String> parsedFields) {
+        String triggerField = (String) p.get("trigger_field");
+        List<String> requiredAnyOf = (List<String>) p.get("required_any_of");
+        if (triggerField == null || requiredAnyOf == null || requiredAnyOf.isEmpty()) {
+            return null;
+        }
+        if (!parsedFields.containsKey(triggerField)) {
+            return null;
+        }
+        boolean anyRequiredPresent = requiredAnyOf.stream().anyMatch(parsedFields::containsKey);
+        if (!anyRequiredPresent) {
+            return "source field '" + triggerField + "' is present but none of " + requiredAnyOf + " are";
+        }
+        return null;
+    }
+
+    /**
+     * VR011 shape: MT rule "if trigger_field's value is one of trigger_values,
+     * forbidden_field must NOT be present" - e.g. Rule C4, "if field 23B is
+     * SPRI, field 53a must not be used with option D." A cross-field VALUE
+     * restriction, not a currency/amount comparison (VR001's shape) or a
+     * plain presence pairing (VR012's shape above).
+     */
+    @SuppressWarnings("unchecked")
+    private String evalValueForbidsPresence(Map<String, Object> p, Map<String, String> parsedFields) {
+        String triggerField = (String) p.get("trigger_field");
+        List<String> triggerValues = (List<String>) p.get("trigger_values");
+        String forbiddenField = (String) p.get("forbidden_field");
+        if (triggerField == null || triggerValues == null || forbiddenField == null) {
+            return null;
+        }
+        String triggerValue = parsedFields.get(triggerField);
+        if (triggerValue == null || !triggerValues.contains(triggerValue.trim())) {
+            return null;
+        }
+        if (parsedFields.containsKey(forbiddenField)) {
+            return "source field '" + triggerField + "'=" + triggerValue + " forbids source field '" + forbiddenField
+                    + "', but it is present";
+        }
+        return null;
+    }
+
+    /**
+     * VR013 shape: MT rule "if trigger_field's value is one of trigger_values,
+     * target_path must be present in the converted output" - e.g. Rule C12,
+     * "if field 23B is SPRI/SSTD/SPAY, subfield 1 (Account) in field 59a is
+     * mandatory." Same "value gates a requirement" shape as
+     * evalValueForbidsPresence above, but requiring TARGET presence instead
+     * of forbidding SOURCE presence - kept as a separate method rather than
+     * one parameterized rule_type, since conflating "must be absent" and
+     * "must be present" behind one flag invites exactly the kind of
+     * silent-inversion bug this document works hard to avoid elsewhere.
+     */
+    @SuppressWarnings("unchecked")
+    private String evalValueRequiresTargetPresence(Map<String, Object> p, Map<String, String> parsedFields, Map<String, String> tree) {
+        String triggerField = (String) p.get("trigger_field");
+        List<String> triggerValues = (List<String>) p.get("trigger_values");
+        String targetPath = (String) p.get("target_path");
+        if (triggerField == null || triggerValues == null || targetPath == null) {
+            return null;
+        }
+        String triggerValue = parsedFields.get(triggerField);
+        if (triggerValue == null || !triggerValues.contains(triggerValue.trim())) {
+            return null;
+        }
+        if (!presentUnder(tree, targetPath)) {
+            return "source field '" + triggerField + "'=" + triggerValue + " requires " + targetPath
+                    + " to be present, but it is absent";
         }
         return null;
     }
@@ -521,6 +782,39 @@ public class ValidatorService {
             }
         }
         return problems.isEmpty() ? null : String.join("; ", problems);
+    }
+
+    /**
+     * VR009 shape: a numerically-zero amount at a given target path is
+     * rejected - e.g. MT103 Network Validated Rule D57, "Amount must not
+     * equal zero," for field 71G (Receiver's Charges). Deliberately a
+     * separate, post-conversion check rather than something the source
+     * field's own decimal_comma_to_dot transformation enforces: that
+     * transformation's job is FORMAT conversion (comma to dot, trailing-
+     * comma handling), not business-rule value validation - "1,25" and
+     * "0,00" are both syntactically valid decimals it must accept, and
+     * only the latter is a rule violation. A value that fails to parse as
+     * a number is not this rule's concern (some other check owns that
+     * failure mode); only a value that parses AND equals exactly zero
+     * fails here.
+     */
+    private String evalAmountNotZero(Map<String, Object> p, Map<String, String> tree) {
+        Object amountFieldObj = p.get("amount_field");
+        if (!(amountFieldObj instanceof String amountField)) {
+            return null;
+        }
+        String value = tree.get(amountField);
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (new java.math.BigDecimal(value).compareTo(java.math.BigDecimal.ZERO) == 0) {
+                return amountField + "=" + value + " must not equal zero";
+            }
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        return null;
     }
 
     /**

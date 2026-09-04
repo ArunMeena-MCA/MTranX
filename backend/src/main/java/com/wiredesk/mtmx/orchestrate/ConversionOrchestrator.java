@@ -3,6 +3,7 @@ package com.wiredesk.mtmx.orchestrate;
 import com.wiredesk.mtmx.config.AppProperties;
 import com.wiredesk.mtmx.convert.ConvertedMessage;
 import com.wiredesk.mtmx.convert.ConverterService;
+import com.wiredesk.mtmx.exception.MandatorySourceFieldMissingException;
 import com.wiredesk.mtmx.exception.MappingDocIncompleteException;
 import com.wiredesk.mtmx.exception.ValidationFailedException;
 import com.wiredesk.mtmx.mapping.AuditResult;
@@ -76,6 +77,25 @@ public class ConversionOrchestrator {
         ParsedMessage parsed = sourceFormat.toUpperCase().startsWith("MT")
                 ? mtParser.parse(rawText, sourceFormat)
                 : mxParser.parse(rawText, sourceFormat);
+
+        // Fail fast on a source message that is missing a field the mapping
+        // doc declares mandatory per the real SWIFT standard (e.g. MT103's
+        // 20/23B/32A/71A, or "at least one of 50A/50F/50K") - checked here,
+        // BEFORE the first conversion attempt, because this is a property of
+        // the input alone and can never be fixed by retrying the converter
+        // against the same parsed fields. Previously this same check only
+        // ran post-conversion inside ValidatorService, where its failure was
+        // indistinguishable from a retryable CONVERSION_ERROR - burning up
+        // to maxConverterRetries+2 pointless converter re-runs before
+        // ValidationFailedException was finally thrown. That post-conversion
+        // check is intentionally left in place too (defense in depth, same
+        // pattern as VR006's dual-mechanism enforcement) in case some future
+        // caller reaches ConverterService directly without going through
+        // this orchestrator.
+        List<String> mandatoryFieldProblems = validator.checkMandatorySourceFields(parsed.getFields(), doc);
+        if (!mandatoryFieldProblems.isEmpty()) {
+            throw new MandatorySourceFieldMissingException(mandatoryFieldProblems);
+        }
 
         ValidationReport lastReport = null;
         int maxAttempts = props.getMaxConverterRetries() + 2;

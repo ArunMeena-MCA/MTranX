@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import MessagePanel from "./components/MessagePanel.jsx";
 import PipelineStatus from "./components/PipelineStatus.jsx";
 import DiagnosticsPanel from "./components/DiagnosticsPanel.jsx";
+import UploadMappingPanel from "./components/UploadMappingPanel.jsx";
 import { fetchMappings, convertMessage } from "./lib/api.js";
 import { SAMPLE_MT103 } from "./lib/samples.js";
-import { detectSourceFormat } from "./lib/detectFormat.js";
+import { detectSourceFormat, isMtFormat } from "./lib/detectFormat.js";
 
 const FALLBACK_MAPPINGS = [
   { conversion_id: "MT103_TO_PACS008", source_format: "MT103", target_format: "pacs.008.001.08" },
@@ -13,6 +14,8 @@ const FALLBACK_MAPPINGS = [
 export default function App() {
   const [mappings, setMappings] = useState(FALLBACK_MAPPINGS);
   const [engineOnline, setEngineOnline] = useState(null); // null = checking, true/false after
+  const [view, setView] = useState("convert"); // convert | upload
+  const [convertDirection, setConvertDirection] = useState("MT_TO_MX"); // MT_TO_MX | MX_TO_MT
 
   const [sourceFormat, setSourceFormat] = useState("MT103");
   const [targetFormat, setTargetFormat] = useState("pacs.008.001.08");
@@ -31,14 +34,33 @@ export default function App() {
       .catch(() => setEngineOnline(false));
   }, []);
 
+  // Every registered mapping is classified MT_TO_MX or MX_TO_MT by its own
+  // source_format's shape (same MT-vs-MX convention the backend itself
+  // uses for rendering - see isMtFormat) - this is what lets the direction
+  // toggle actually filter the dropdowns instead of showing every
+  // conversion pair merged into one flat, directionless list.
+  const mappingsForDirection = useMemo(
+    () =>
+      mappings.filter((m) =>
+        convertDirection === "MT_TO_MX" ? isMtFormat(m.source_format) : !isMtFormat(m.source_format)
+      ),
+    [mappings, convertDirection]
+  );
+
   const sourceOptions = useMemo(
-    () => [...new Set(mappings.map((m) => m.source_format))],
-    [mappings]
+    () => [...new Set(mappingsForDirection.map((m) => m.source_format))],
+    [mappingsForDirection]
   );
   const targetOptions = useMemo(
-    () => mappings.filter((m) => m.source_format === sourceFormat).map((m) => m.target_format),
-    [mappings, sourceFormat]
+    () => mappingsForDirection.filter((m) => m.source_format === sourceFormat).map((m) => m.target_format),
+    [mappingsForDirection, sourceFormat]
   );
+
+  useEffect(() => {
+    if (sourceOptions.length > 0 && !sourceOptions.includes(sourceFormat)) {
+      setSourceFormat(sourceOptions[0]);
+    }
+  }, [sourceOptions, sourceFormat]);
 
   useEffect(() => {
     if (targetOptions.length > 0 && !targetOptions.includes(targetFormat)) {
@@ -80,20 +102,43 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleConvert]);
 
+  // Unfiltered (both directions) - used only to check "is this detected
+  // format supported at all", separate from sourceOptions (which is
+  // filtered to the CURRENTLY selected direction for the dropdown).
+  const allSourceFormats = useMemo(
+    () => [...new Set(mappings.map((m) => m.source_format))],
+    [mappings]
+  );
+
   const handleRawTextChange = useCallback(
     (text) => {
       setRawText(text);
       const detected = detectSourceFormat(text);
       // Only auto-select a format the backend's mapping docs actually
-      // support (sourceOptions) - never set the dropdown to a value with
-      // no matching <option>, and never override with a no-op when it's
-      // already correct.
-      if (detected && detected !== sourceFormat && sourceOptions.includes(detected)) {
+      // support - never set the dropdown to a value with no matching
+      // <option>, and never override with a no-op when it's already
+      // correct. A paste can also imply the OTHER direction (e.g. pasting
+      // an MX message while the toggle is still on MT->MX) - switch the
+      // toggle too so the dropdown that ends up showing it is the right one.
+      if (detected && detected !== sourceFormat && allSourceFormats.includes(detected)) {
+        const detectedDirection = isMtFormat(detected) ? "MT_TO_MX" : "MX_TO_MT";
+        if (detectedDirection !== convertDirection) {
+          setConvertDirection(detectedDirection);
+        }
         setSourceFormat(detected);
       }
     },
-    [sourceFormat, sourceOptions]
+    [sourceFormat, allSourceFormats, convertDirection]
   );
+
+  const handleMappingUploaded = useCallback(() => {
+    fetchMappings()
+      .then((data) => {
+        if (data && data.length > 0) setMappings(data);
+      })
+      .catch(() => {});
+    setView("convert");
+  }, []);
 
   const handleCopy = () => {
     if (result?.rendered_output) {
@@ -112,6 +157,26 @@ export default function App() {
           <h1 className="font-display text-[15px] font-semibold text-ledger-ink">
             MT / MX Message Conversion
           </h1>
+          <nav className="flex items-center gap-1 pl-2">
+            <button
+              onClick={() => setView("convert")}
+              className={[
+                "rounded px-2 py-1 text-[11px] uppercase tracking-widest2 transition-colors",
+                view === "convert" ? "text-ledger-accent" : "text-ledger-inkDim hover:text-ledger-ink",
+              ].join(" ")}
+            >
+              Convert
+            </button>
+            <button
+              onClick={() => setView("upload")}
+              className={[
+                "rounded px-2 py-1 text-[11px] uppercase tracking-widest2 transition-colors",
+                view === "upload" ? "text-ledger-accent" : "text-ledger-inkDim hover:text-ledger-ink",
+              ].join(" ")}
+            >
+              Upload mapping
+            </button>
+          </nav>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -130,8 +195,32 @@ export default function App() {
         </div>
       </header>
 
+      {view === "upload" ? (
+        <UploadMappingPanel onUploaded={handleMappingUploaded} />
+      ) : (
+        <>
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3 border-b border-ledger-line bg-ledger-panelAlt px-5 py-2.5">
+        <div className="flex items-center gap-1">
+          {[
+            { value: "MT_TO_MX", label: "MT → MX" },
+            { value: "MX_TO_MT", label: "MX → MT" },
+          ].map((d) => (
+            <button
+              key={d.value}
+              onClick={() => setConvertDirection(d.value)}
+              className={[
+                "rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                convertDirection === d.value
+                  ? "border-ledger-accent bg-ledger-accentDim text-ledger-ink"
+                  : "border-ledger-line bg-ledger-panel text-ledger-inkDim hover:text-ledger-ink",
+              ].join(" ")}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-ledger-inkDim">|</span>
         <FormatSelect label="Source" value={sourceFormat} options={sourceOptions} onChange={setSourceFormat} />
         <span className="text-ledger-inkDim">→</span>
         <FormatSelect label="Target" value={targetFormat} options={targetOptions} onChange={setTargetFormat} />
@@ -146,7 +235,7 @@ export default function App() {
         </button>
         <button
           onClick={handleConvert}
-          disabled={status === "running" || !rawText.trim()}
+          disabled={status === "running" || !rawText.trim() || sourceOptions.length === 0 || targetOptions.length === 0}
           className="rounded bg-ledger-accent px-4 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {status === "running" ? "Converting…" : "Convert message"}
@@ -189,6 +278,8 @@ export default function App() {
         auditWarnings={result?.audit_warnings}
         fieldTrace={result?.field_trace}
       />
+        </>
+      )}
     </div>
   );
 }
@@ -198,11 +289,12 @@ function FormatSelect({ label, value, options, onChange }) {
     <label className="flex items-center gap-2 text-[11px] text-ledger-inkDim">
       <span className="uppercase tracking-widest2">{label}</span>
       <select
-        value={value}
+        value={options.length === 0 ? "" : value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-ledger-line bg-ledger-panel px-2 py-1 text-[12px] text-ledger-ink outline-none focus:border-ledger-accent"
+        disabled={options.length === 0}
+        className="rounded border border-ledger-line bg-ledger-panel px-2 py-1 text-[12px] text-ledger-ink outline-none focus:border-ledger-accent disabled:opacity-50"
       >
-        {options.length === 0 && <option value={value}>{value}</option>}
+        {options.length === 0 && <option value="">none registered</option>}
         {options.map((opt) => (
           <option key={opt} value={opt}>
             {opt}

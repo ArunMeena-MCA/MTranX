@@ -31,6 +31,25 @@ public class DecompositionRule {
     private String accountSubElement = "AccountId";
     private Map<String, String> subElementTargets = new LinkedHashMap<>();
 
+    /**
+     * Sub-element name -> {pattern, if_match_target, else_target}. Checked
+     * BEFORE subElementTargets for a given key: if present, the extracted
+     * value's destination is chosen by matching pattern (full-string match)
+     * against the value itself, instead of using a single fixed path. Absent
+     * for a key (the common case) means unchanged, existing behavior - this
+     * is purely additive. See ConditionalSubElementTarget's own Javadoc for
+     * why this exists instead of a second field_mappings entry.
+     */
+    private Map<String, ConditionalSubElementTarget> conditionalSubElementTargets = new LinkedHashMap<>();
+
+    /**
+     * Optional: enriches this decomposition's free-text address lines with
+     * structured street/city/country via the libpostal sidecar. Null (the
+     * default, for every existing entry) means no change to current
+     * behavior at all. See StructuredAddressRule's own Javadoc.
+     */
+    private StructuredAddressRule structuredAddress;
+
     public String getPatternDescription() {
         return patternDescription;
     }
@@ -95,5 +114,21 @@ public class DecompositionRule {
 
     public void setSubElementTargets(Map<String, String> subElementTargets) {
         this.subElementTargets = subElementTargets;
+    }
+
+    public Map<String, ConditionalSubElementTarget> getConditionalSubElementTargets() {
+        return conditionalSubElementTargets;
+    }
+
+    public void setConditionalSubElementTargets(Map<String, ConditionalSubElementTarget> conditionalSubElementTargets) {
+        this.conditionalSubElementTargets = conditionalSubElementTargets;
+    }
+
+    public StructuredAddressRule getStructuredAddress() {
+        return structuredAddress;
+    }
+
+    public void setStructuredAddress(StructuredAddressRule structuredAddress) {
+        this.structuredAddress = structuredAddress;
     }
 }

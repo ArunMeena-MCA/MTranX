@@ -1,8 +1,8 @@
 conversion_id: MT103_TO_PACS008
 source_format: MT103
 target_format: pacs.008.001.08
-version: "2.7"
-last_updated: "2026-09-01"
+version: "2.21"
+last_updated: "2026-09-04"
 scope_notes: >
   SWIFT MT103 -> pacs.008.001.08 mapping profile.
 
@@ -35,10 +35,21 @@ scope_notes: >
   rather than inventing values.
 
 
-  ADDRESS POLICY: Do not infer Town/Country/PostalCode from free-form K-option text. For F-option structured addresses, preserve
-  qualified data where the engine can deterministically extract it. From 14 November 2026 Swift requires fully structured
-  or hybrid addresses for in-scope cross-border payment messages, with Town Name and Country Code in the structured part.
-  Any deployment intended to be live after that date must add the required address validation/structuring layer.
+  ADDRESS POLICY (v2.14 UPDATE): 50K/bare-59's free-text AdrLine content can now OPTIONALLY be additionally enriched with
+  structured StrtNm/TwnNm/PstCd/Ctry via a libpostal-based sidecar service (address-parser-service/, called by
+  ConverterService.enrichWithStructuredAddress) - implementing the "hybrid address" model (structured fields ALONGSIDE
+  free-text AdrLine, not instead of it) Swift requires from 14 November 2026 for in-scope cross-border payment messages.
+  This is OFF by default (mtmx.address-parser-enabled=false) - AdrLine-only remains this document's default behavior,
+  schema-valid and SWIFT-compliant today. When enabled, structured fields are populated ONLY when the sidecar's own
+  country cross-check (against a real ISO 3166 list) succeeds - if it doesn't, or the sidecar is unreachable, the
+  message still converts successfully with AdrLine-only, exactly as before enabling the feature; nothing is ever lost,
+  and nothing is ever guessed. Still true, unchanged: this document does NOT itself infer Town/Country/PostalCode from
+  free text via regex/heuristic - the libpostal service is a real trained statistical model, not a hand-written guess,
+  and even it is not trusted blindly (see its own country-confidence gate). For F-option structured addresses (50F/59F),
+  the existing numbered-line extraction (unambiguous, since the source itself delimits country by position) is
+  unaffected by this change and remains the primary source for those fields. A deployment intended to be
+  live after 14 November 2026 must set mtmx.address-parser-enabled=true and actually run address-parser-service/ -
+  simply having this capability exist in the codebase does not make a deployment compliant if it isn't turned on.
 
 
   SETTLEMENT POLICY: SettlementMethod is not a value that can be safely inferred from the mere absence of 53/54/55. The current
@@ -54,6 +65,33 @@ scope_notes: >
   historical messages, or test/reference tooling - not for translating live Swift cross-border network traffic, which is
   MX-native today. Confirm the actual source of incoming MT103 messages before deploying this mapping in production, since
   that context affects how strict the fail-closed decisions below should be.
+
+
+  M/O STATUS RESOLUTION (v2.8): supersedes the earlier "M/O status: no MT103 FIN spec attached... all set to false"
+  known_limitations entry. Two independent public MT103 field-spec sources (Paiementor's format specification table and
+  iotafinance's MT103 detail view) agree on which fields are unconditionally mandatory in every real MT103, independent of
+  which option letter is used: 20, 23B, 32A, 50a (any of 50A/50F/50K), 59a (any of 59/59A/59F), and 71A. This document now
+  reflects that as follows, and deliberately NOT the same way for every field:
+  - 20, 23B, 32A, 71A - single, non-alternative fields. Each one's field_mappings entry/entries now have mandatory: true
+    directly, since there is no ambiguity about which entry represents "the field" for these four.
+  - 50a and 59a - each has THREE option-letter variants (50A/50F/50K, 59/59A/59F), and only ONE is ever populated in any
+    single real message; the other two are legitimately, correctly absent. Setting mandatory: true on all three entries per
+    group would be WRONG - it would make the engine reject a perfectly valid 50K-only message merely because 50A and 50F
+    (which were never meant to be present) are absent too. mandatory: true is a per-ENTRY flag with no "at least one of
+    these entries" semantics, so it is structurally the wrong mechanism for an alternative-letter group; these entries'
+    individual mandatory flags therefore correctly stay false. The actual group-level mandatory enforcement is VR005
+    (rule_type: source_alternative_group_required, in validation_rules below), which checks "at least one of 50A/50F/50K
+    is present in the source message" (and likewise for 59/59A/59F) - the mechanism this document already had for exactly
+    this shape of rule, now also run as a fail-fast precondition (ConversionOrchestrator.checkMandatorySourceFields(), called
+    immediately after parsing, before the first conversion attempt) rather than only re-checked after a conversion attempt
+    had already run. See VR005's own logic note below for the engine-wiring history of that fix.
+  - GENERATED:*/__MT_SENDER_BIC__/__MT_RECEIVER_BIC__ entries already marked mandatory: true were untouched by this pass -
+    they were correct before and remain correct; this resolution only affects entries whose mandatory flag was previously
+    a placeholder false regardless of real status.
+  Fields NOT in this mandatory set (13C, 23E, 26T, 33B, 36, 51A, 52a, 53a, 54a, 55a, 56a, 57a, 70, 71F, 71G, 72, 77B) remain
+  mandatory: false - genuinely optional per both sources consulted, with 36 additionally having its own conditional
+  requirement already covered by VR001 (mandatory only when 33B is present and its currency differs from 32A's), not a
+  blanket M/O status.
 
 field_mappings:
 - source_field: "20"
@@ -149,7 +187,7 @@ field_mappings:
 - source_field: "32A"
   source_name: "Value Date (of 32A composite)"
   target_path: "CdtTrfTxInf.IntrBkSttlmDt"
-  mandatory: false
+  mandatory: true
   transformation: llm_assisted
   notes: >
     UHB p.212, verbatim: "the value date comparable with the MT Field
@@ -160,6 +198,11 @@ field_mappings:
     extraction). DECISION PROCEDURE (verbatim, given to the LLM step):
     "Take MT field 32A. First 6 characters = value date, YYMMDD. Convert
     to YYYY-MM-DD, YY = 20YY. Output only the converted date."
+    v2.8 M/O CORRECTION: mandatory changed false->true, matching this entry's own edge_cases below, which already said
+    "reject - mandatory" even while the mandatory: flag itself said false - a direct inconsistency this fixes. Field 32A is
+    unconditionally mandatory in every MT103 per the SWIFT MT103 Standards field table, confirmed by two independent public
+    field-spec sources and already enforced at the message level by VR005. See the superseded "M/O status" known_limitations
+    entry for why every field was originally left false regardless of real status.
   edge_cases:
   - condition: "YY outside 01-60"
     handling: >
@@ -175,7 +218,7 @@ field_mappings:
 - source_field: "32A"
   source_name: "Interbank Settled Amount - currency portion (of 32A composite)"
   target_path: "CdtTrfTxInf.IntrBkSttlmAmt.@Ccy"
-  mandatory: false
+  mandatory: true
   transformation: direct_copy
   extract_pattern: "^\\d{6}([A-Z]{3})"
   allowed_pattern: "^[A-Z]{3}$"
@@ -209,7 +252,7 @@ field_mappings:
 - source_field: "32A"
   source_name: "Interbank Settled Amount - amount portion (of 32A composite)"
   target_path: "CdtTrfTxInf.IntrBkSttlmAmt"
-  mandatory: false
+  mandatory: true
   transformation: decimal_comma_to_dot
   extract_pattern: "^\\d{6}[A-Z]{3}(.+)$"
   notes: >-
@@ -217,6 +260,7 @@ field_mappings:
     The mapping schema has no substring/date extraction transform, so llm_assisted remains an engine-schema workaround; the
     decision procedure is deterministic and the LLM must never infer missing data. Reject malformed dates and years outside
     the MT103 01-60 range.
+    v2.8 M/O CORRECTION: mandatory changed false->true - see the 32A/IntrBkSttlmDt entry's identical v2.8 note above.
   edge_cases:
   - condition: "Field absent"
     handling: "reject - mandatory pacs.008 element per UHB p.212"
@@ -231,6 +275,7 @@ field_mappings:
   conditional:
     check_fields:
     - 53A
+    - 53B
     - 53D
     - 54A
     - 54B
@@ -251,6 +296,23 @@ field_mappings:
     elsewhere in this document as an ordinary expected field. A message carrying only 54A (no other 53/54/55 field) would
     previously have been misclassified as INDA despite an explicit correspondent relationship being present. Added for
     symmetry with 53A/53D and 55A/55B/55D.
+    v2.19 BUG FIX (2026-09-04, while implementing 53B support for live test case TC22): "53B" was missing from check_fields
+    - only 53A and 53D were listed, while 54 and 55 both symmetrically included all three options (A/B/D). A message
+    carrying ONLY 53B (a real, common usage per field 53a's own usage rule - see the new 53B entry below) was
+    previously misclassified as INDA despite an explicit reimbursement relationship being present. Added for
+    consistency with 54B/55B, which were already correctly included.
+    v2.16 SOURCING NOTE (2026-09-03): the real SWIFT "Standards MT November 2021" MT103 Message Reference Guide (fetched and
+    read directly) confirms there is no MT103 field corresponding to SttlmMtd at all - Fields 1-23 cover Sender's Reference
+    through Regulatory Reporting, none of them GrpHdr/SttlmInf/SttlmMtd - consistent with this entry's own "(derived)"
+    labelling; the absence itself is now directly confirmed, not assumed. A secondary source (a core-banking vendor's
+    settlement-method documentation, found via web search but NOT independently read at the primary-source page - the page
+    itself returned HTTP 404 on direct fetch) describes settlement-method derivation as driven by the SENDING BANK'S OWN
+    account-master configuration (whether the correspondent account is held as Nostro or Vostro), not by inspecting which
+    MT fields are present in the incoming message. That is consistent with why no universal SWIFT-standard-level formula
+    exists to cite here: the real trigger lives in each bank's own systems, which this converter has no access to. This
+    document's check_fields heuristic (COVE if 53/54/55 present) remains a documented, disclosed IMPLEMENTATION DEFAULT,
+    not a discovered SWIFT rule - unchanged in substance from earlier versions, but now more precisely justified as to WHY
+    no better citation exists, rather than left as an open question further searching might resolve.
   edge_cases:
   - condition: "None of 53A/54A/55A present, and the real settlement method for this corridor is not INDA"
     handling: "reject is safer than silently mislabeling - change if_none_present to the correct code, or add a stricter check_fields/value-based
@@ -260,50 +322,300 @@ field_mappings:
   source_name: "Sender's Correspondent (option A only)"
   target_path: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.9 BUG FIX: was a plain direct_copy assuming the raw value was ALWAYS a bare single-line BIC - the same bug
+      class already found and fixed for 56A/57A in this document's own v1.1 changelog ("was a plain direct_copy
+      assuming the raw value was ALWAYS a bare single-line BIC"), but never applied here. Field 53A's real format is
+      "[/1!a][/34x]" (an OPTIONAL leading Party Identifier / account line) THEN "4!a2!a2!c[3!c]" (the BIC) - a
+      direct_copy on a genuine two-line raw value would copy the WHOLE multi-line string into BICFI, failing BIC
+      pattern validation. Confirmed against TARGET2 "General Functional Specification of the MX/ISO 20022 migration,"
+      Annex 5.1.3: 53A's Party Identifier line maps to GroupHeader/SettlementInformation/SettlementAccount/Identification
+      - not dropped, as this entry previously did by never reading it at all. Mirrors the identical, already-proven
+      account_line_pattern/strip_account_line_prefix mechanism this document's companion MT202_TO_PACS00900108.yaml
+      document already uses for its own 53A entry, targeting the same SttlmAcct path.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "GrpHdr.SttlmInf.SttlmAcct.Id.IBAN"
+        else_target: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: >
     UHB p.206, verbatim: "comparable with the Field 53a in the legacy
     FIN message." Relevant only when SttlmMtd=COVE (VR003). Option A
-    (BIC) only - 53B/53D not covered, no sourced line structure for
-    them (falls to unmapped_fields_policy=error, correctly).
+    (BIC) only - see the new dedicated 53B/53D entries below (v2.19,
+    from live test cases TC22/TC28) for those two options, previously
+    genuinely unmapped (unmapped_fields_policy=error) - a real coverage
+    gap for entirely legal SWIFT syntax, not an edge case.
   edge_cases:
   - condition: "Field absent"
     handling: "reject only if SttlmMtd=COVE requires it; otherwise legitimately absent (Min 0)"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
+
+- source_field: "53B"
+  source_name: "Sender's Correspondent (option B - account only, no BIC)"
+  target_path: "GrpHdr.SttlmInf.SttlmAcct"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.19 GAP FIX (2026-09-04, from live test case TC22): field 53a option B was entirely unmapped
+      (unmapped_fields_policy=error rejected any message carrying it) despite being real, common, spec-legal
+      syntax - the real SWIFT MT103 field spec's own USAGE RULES for field 53a state: "In those cases where there
+      are multiple direct account relationships, in the currency of the transaction, between the Sender and the
+      Receiver, and one of these accounts is to be used for reimbursement, the account to be credited or debited
+      must be indicated in field 53a, using option B with the party identifier only" - i.e. 53B's realistic,
+      documented usage is genuinely account-only, no BIC, no location line, matching TC22's own input
+      (":53B:/12345678901"). FORMAT per the spec: "[/1!a][/34x]" (Party Identifier) then "[35x]" (Location) - both
+      optional. This entry extracts the account (Party Identifier) via the same strip_account_line_prefix mechanism
+      as 53A, routed to the SAME SttlmAcct target 53A's own account-portion already uses. RESIDUAL GAP, disclosed
+      not guessed: a 53B carrying a SECOND line (the free-text "Location" subfield) has no sourced pacs.008 target -
+      no worked example or citation was found for where a bare location string belongs, and none of
+      GroupHeader93/SettlementInstruction15's elements are an obvious fit for unstructured free text. That second
+      line is currently NOT captured (silently, since decompose_party only rejects on a DECLARED sub_element failing
+      to match, not on unconsumed extra lines) - flagged here rather than left undocumented. Unlike 53A/53D, option
+      B never supplies a BIC, so this entry deliberately does NOT populate InstgRmbrsmntAgt at all - it stays
+      correctly absent for a 53B-only message (minOccurs=0, valid per schema).
+      IMPLEMENTATION NOTE: DecompositionService.decompose() only returns its result directly when sub_elements is
+      non-empty AND every declared (non-optional) entry matched - an EMPTY sub_elements map falls through to the
+      guided LLM fallback instead, even though the account was already correctly captured via
+      strip_account_line_prefix/account_sub_element before that point. The "Placeholder" entry below exists purely
+      to satisfy that non-empty check - line:5 is chosen deliberately far beyond option B's real 1-2 line range
+      (Party Identifier, optionally Location) so it can never actually match and misroute anything; it is not a
+      real field. Checked directly against ConverterService/DecompositionService source, not assumed.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      Placeholder:
+        rule: "line:5"
+        optional: true
+    sub_element_targets: {}
+    conditional_sub_element_targets:
+      Id:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "GrpHdr.SttlmInf.SttlmAcct.Id.IBAN"
+        else_target: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    Option B (account/Party Identifier only, no BIC) - see pattern_description for the full citation and the
+    disclosed Location-line residual gap.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - Min 0"
+  - condition: "No leading-slash account line present (e.g. field carries only a Location line, no account)"
+    handling: "not an error - this entry produces no value; nothing to route"
+
+- source_field: "53D"
+  source_name: "Sender's Correspondent (option D - name/address, no BIC)"
+  target_path: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId"
+  mandatory: false
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.19 GAP FIX (2026-09-04, from live test case TC28): field 53a option D was entirely unmapped despite being
+      real, spec-legal syntax - FORMAT per the real SWIFT MT103 field spec: "[/1!a][/34x]" (Party Identifier) then
+      "4*35x" (Name and Address), the SAME shape already proven for 52D/57D. Mirrors those two entries' exact
+      mechanism: strip_account_line_prefix extracts an optional leading account line, sub_elements.Nm takes the
+      first remaining line, AdrLine takes the rest. Party Identifier (if present) routed to SttlmAcct/Othr/Id, the
+      same safe/no-guess default 52D/57D already use for their own Party Identifier line, rather than ClrSysMmbId
+      (which needs a configured clearing-system scheme code this document does not have for option D).
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      Nm: "line:0"
+      AdrLine:
+        rule: "lines_from:1"
+        optional: true
+    sub_element_targets:
+      Nm: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId.Nm"
+      AdrLine: "GrpHdr.SttlmInf.InstgRmbrsmntAgt.FinInstnId.PstlAdr.AdrLine"
+      Id: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    Option D (name/address, no BIC) - mirrors 52D/57D exactly; see pattern_description for the citation. Also the
+    concrete case rule C4 restricts: SPRI forbids 53a option D (see VR011).
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error on its own - falls through to the 53A/53B account paths above (which independently
+      populate SttlmAcct/InstgRmbrsmntAgt if present)"
+  - condition: "Content doesn't split cleanly"
+    handling: "reject - do not guess"
+  - condition: "First line is exactly '/' with no content after it"
+    handling: "reject - malformed party-identifier line, distinct from 'no leading slash at all'"
 
 - source_field: "54A"
   source_name: "Receiver's Correspondent (option A only)"
   target_path: "GrpHdr.SttlmInf.InstdRmbrsmntAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "v2.9 BUG FIX: same fix and TARGET2 Annex 5.1.3 citation as the 53A entry above, mirrored for 54a."
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "GrpHdr.SttlmInf.InstdRmbrsmntAgt.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "GrpHdr.SttlmInf.SttlmAcct.Id.IBAN"
+        else_target: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: "UHB p.206, verbatim: \"comparable with the Field 54a in the legacy FIN message.\" Option A only, same caveat as
     53A."
   edge_cases:
   - condition: "Field absent"
     handling: "reject only if required by SttlmMtd=COVE; otherwise legitimately absent"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
 
 - source_field: "55A"
   source_name: "Third Reimbursement Institution (option A only)"
   target_path: "GrpHdr.SttlmInf.ThrdRmbrsmntAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: "v2.9 BUG FIX: same fix and TARGET2 Annex 5.1.3 citation as the 53A entry above, mirrored for 55a."
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "GrpHdr.SttlmInf.ThrdRmbrsmntAgt.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "GrpHdr.SttlmInf.SttlmAcct.Id.IBAN"
+        else_target: "GrpHdr.SttlmInf.SttlmAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: "UHB p.207, verbatim: \"comparable with the Field 55a in the legacy FIN message.\" Option A only."
   edge_cases:
   - condition: "Field absent"
     handling: "not an error - Min 0 per UHB p.207"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
 
 - source_field: "52A"
   source_name: "Ordering Institution, option A (BIC)"
   target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.9 BUG FIX: was a plain direct_copy assuming the raw value was ALWAYS a bare single-line BIC - the same bug
+      class already found and fixed for 56A/57A in this document's v1.1 changelog, but never applied here despite
+      this entry's OWN notes already describing an optional Party Identifier line ("must not be silently discarded").
+      Field 52A's real format is "[/1!a][/34x]" (optional leading Party Identifier/account line) then
+      "4!a2!a2!c[3!c]" (the BIC) - direct_copy on a genuine two-line value would corrupt BICFI. Uses the same
+      strip_account_line_prefix mechanism as 56A/57A. A leading "//..." (clearing-system) line is ALSO matched by
+      this broad account_line_pattern - see the new dedicated "//" entry below, which extracts the clearing-system
+      content from the SAME line.
+      v2.18 BUG FIX (2026-09-04, from live test case TC19): previously this was a deliberate, acknowledged
+      redundancy - the "//SC123456" content ended up written to BOTH the correct ClrSysMmbId/MmbId AND, wrongly,
+      DbtrAgtAcct/Id/Othr/Id as if it were a generic account identifier. That was accepted at the time because
+      "this schema's decomposition model does not support" routing one extracted value two different ways by
+      content. It now does: conditional_sub_element_targets.Id gained skip_pattern (new field, see
+      ConditionalSubElementTarget's Javadoc) - "^/.*$" matches the captured Id value when the ORIGINAL line had a
+      SECOND leading slash (a genuine account never does; account_line_pattern only strips the first "/", so a
+      "//SC123456" line's captured content is "/SC123456" - itself still slash-prefixed - while a real
+      "/12345678" account's captured content is "12345678", no leading slash). When skip_pattern matches, this
+      sub-element is written nowhere at all, not even Othr/Id - DbtrAgtAcct now correctly stays absent for a
+      clearing-system-only line, with zero behavior change for a genuine account line.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        skip_pattern: "^/.*$"
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.DbtrAgtAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.DbtrAgtAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: >-
     52A Ordering Institution -> DebtorAgent. BIC is mapped to FinInstnId/BICFI. If 52a is absent, the MT sender is the standard
     fallback for the mandatory DebtorAgent role in the MT103->pacs.008 translation context. The optional Party Identifier
-    must not be silently discarded: account identifiers belong in DbtrAgtAcct; clearing-system identifiers require a configured
-    clearing-system mapping.
+    must not be silently discarded: account identifiers belong in DbtrAgtAcct (v2.13: now IBAN-vs-Othr conditional, see
+    conditional_sub_element_targets); clearing-system identifiers require a configured
+    clearing-system mapping - see the new dedicated "//" entry below for that specific case.
+    v2.18: a genuine "//..." clearing-system line's captured content still starts with "/" (account_line_pattern only
+    strips the FIRST slash) - now used as the skip_pattern signal to route it to NEITHER DbtrAgtAcct target, since the
+    dedicated "//" entries below already own that content. A single-slash account line's captured content never starts
+    with "/", so skip_pattern never fires for a real account - no behavior change for that case.
   edge_cases:
   - condition: "Field absent"
     handling: "not an error on its own - falls through to 52D, then to the Sender-BIC fallback below"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
+
+- source_field: "52A"
+  source_name: "Ordering Institution, option A - clearing-system member id (line starts with '//', code stripped)"
+  target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId.ClrSysMmbId.MmbId"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.9 CORRECTION (same-turn fix): the original v2.9 version of this entry output everything after "//" verbatim
+    as MmbId - WRONG, caught immediately by re-extracting TARGET2 Annex 5.1.3's "ClearingSystemIdentification
+    mapping" table as an image (it is embedded as a picture in the source PDF, not text - plain text extraction
+    returned only the table's column headers, which is why the original entry treated the table as unrecoverable;
+    re-extracted via PyMuPDF + direct visual reading instead of OCR). The table's own worked example is decisive:
+    MT "52A://BL12345678\nBANKDEFF" -> XML "<ClrSysMmbId><ClrSysId><Cd>DEBLZ</Cd></ClrSysId><MmbId>12345678</MmbId></ClrSysMmbId>"
+    - i.e. the content after "//" is ITSELF composite: a 2-character MT clearing-system code (here "BL") immediately
+    followed by the member id (here "12345678"), NOT one opaque string. DECISION PROCEDURE: if a 52A line begins with
+    "//", take the 2 characters immediately following it as the MT clearing-system code, and take remainder of that
+    line (after those 2 characters) as MmbId. See the paired ClrSysId/Cd entry below for the code itself, which uses
+    the exact same 2-character prefix to look up the ISO 20022 equivalent.
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "Line begins with '//' but has fewer than 2 characters after it"
+    handling: "reject - malformed, cannot contain both a clearing-system code and a member id"
+
+- source_field: "52A"
+  source_name: "Ordering Institution, option A - clearing-system code (line starts with '//', first 2 chars, looked up)"
+  target_path: "CdtTrfTxInf.DbtrAgt.FinInstnId.ClrSysMmbId.ClrSysId.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.9 GAP FIX: paired with the MmbId entry above - see its notes for the worked-example citation and the same
+    TARGET2 Annex 5.1.3 image table this entry's code list is transcribed from verbatim (Country / System / MT code /
+    ISO 20022 code): Australia (Australian BSB) AU->AUBSB; Austria (Bankleitzahl) AT->ATBLZ; Canada (Payments
+    Association Payment Routing Number) CC->CACPA; China (CNAPS Identifier) CN->CNAPS; Germany (Bankleitzahl)
+    BL->DEBLZ; Greece (Hellenic Bank Identification Code) GR->GRHIC; Hong Kong (Hong Kong Bank Code) HK->HKNCC; India
+    (Indian Financial System Code) IN->INFSC; Ireland (Irish National Clearing Code) IE->IENCC; Italy (Italian
+    Domestic Identification Code) IT->ITNCC; Japan (Zengin Clearing Code) JP->JPZGN; New Zealand (National Clearing
+    Code) NZ->NZNCC; Poland (National Clearing Code) PL->PLKNR; Portugal (National Clearing Code) PT->PTNCC; Russia
+    (Central Bank Identification Code) RU->RUCBC; South Africa (National Clearing Code) ZA->ZANCC; Spain (Domestic
+    Interbanking Code) ES->ESNCC; Switzerland BC Code SW->CHBCC; Switzerland SIC Code SW->CHSIC (NOTE: Switzerland
+    has TWO systems sharing the same MT code "SW" - genuinely ambiguous from the MT side alone; this document does
+    NOT guess which one, see edge_cases); UK (Domestic Sort Code) SC->GBDSC; US CHIPS Participant Identifier
+    CP->USPID; US United States Routing Number FW->USABA. DECISION PROCEDURE: take the 2-character MT clearing-system
+    code identified by the paired MmbId entry above; if it matches exactly one row in this table, output that row's
+    ISO 20022 code to Cd. If it matches zero rows, or matches the ambiguous "SW" case, produce no value for Cd (the
+    MmbId entry above still fires independently - a member id without a resolved ClrSysId/Cd is valid pacs.008,
+    just less complete).
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "MT clearing-system code is not in the table above, or is 'SW' (ambiguous between BC Code and SIC Code)"
+    handling: "not an error - do not guess; Cd is left unpopulated rather than picking arbitrarily"
 
 - source_field: "52D"
   source_name: "Ordering Institution, option D (name/address)"
@@ -407,7 +719,34 @@ field_mappings:
   source_name: "Intermediary Institution (option A only)"
   target_path: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.19 BUG FIX (2026-09-04, from live test case TC24): was a plain direct_copy assuming the raw value was
+      ALWAYS a bare single-line BIC - the exact same bug class already found and fixed for 52A/53A/54A/55A/57A (a
+      prior version of the 53A entry's own notes wrongly claimed this was "already found and fixed for 56A/57A" -
+      that claim was stale/wrong for 56A specifically; this entry was never actually touched). Field 56a's real
+      format is "[/1!a][/34x]" (optional leading Party Identifier line, which may itself be a "//"-prefixed
+      clearing-system code per this field's own CODES section) then "4!a2!a2!c[3!c]" (the BIC) - direct_copy on a
+      genuine two-line raw value copies the WHOLE multi-line string into BICFI, failing BIC pattern validation (the
+      exact XSD error TC24 surfaced: "cvc-pattern-valid... Value '//FW021000089\nCHASUS33' is not facet-valid").
+      Uses the identical strip_account_line_prefix + skip_pattern mechanism already proven for 52A (see that entry's
+      v2.9/v2.18 notes) - skip_pattern prevents the SAME "//FW..." duplication bug TC19 found and fixed for 52A from
+      recurring here.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        skip_pattern: "^/.*$"
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.IntrmyAgt1Acct.Id.IBAN"
+        else_target: "CdtTrfTxInf.IntrmyAgt1Acct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: >
     UHB p.225, verbatim: "comparable with the Field 56a in the legacy
     FIN message." Intermediary Agent 2/3 explicitly have "not comparable
@@ -416,11 +755,59 @@ field_mappings:
   edge_cases:
   - condition: "Field absent"
     handling: "not an error - Min 0 per UHB p.225"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
+
+- source_field: "56A"
+  source_name: "Intermediary Institution, option A - clearing-system member id (line starts with '//', code stripped)"
+  target_path: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.ClrSysMmbId.MmbId"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.19 ADDITION (2026-09-04, from live test case TC24): mirrors the 52A clearing-system entries - same TARGET2
+    "General Functional Specification of the MX/ISO 20022 migration," Annex 5.1.3 "ClearingSystemIdentification
+    mapping" table, whose own worked example is decisive: MT "52A://BL12345678\nBANKDEFF" ->
+    "<ClrSysMmbId><ClrSysId><Cd>DEBLZ</Cd></ClrSysId><MmbId>12345678</MmbId></ClrSysMmbId>" - i.e. the content after
+    "//" is ITSELF composite: a 2-character MT clearing-system code immediately followed by the member id, not one
+    opaque string. Applies identically to field 56a, which shares the same "//"-prefixed Party Identifier line
+    format. DECISION PROCEDURE (inlined here, not just cross-referenced, since this entry's own llm_assisted call
+    only ever sees ITS OWN notes at runtime, not another entry's): if a 56A line begins with "//", take the 2
+    characters immediately following it as the MT clearing-system code, and take the remainder of that line (after
+    those 2 characters) as MmbId. See the paired ClrSysId/Cd entry below for the code lookup, which uses the exact
+    same 2-character prefix. TC24's own input (":56A://FW021000089\nCHASUS33") is the Fedwire worked case: code
+    "FW", MmbId "021000089".
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "Line begins with '//' but has fewer than 2 characters after it"
+    handling: "reject - malformed, cannot contain both a clearing-system code and a member id"
+
+- source_field: "56A"
+  source_name: "Intermediary Institution, option A - clearing-system code (line starts with '//', first 2 chars, looked up)"
+  target_path: "CdtTrfTxInf.IntrmyAgt1.FinInstnId.ClrSysMmbId.ClrSysId.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.19 ADDITION: paired with the MmbId entry above - see its notes for the TARGET2 Annex 5.1.3 citation. Same
+    lookup table as 52A's paired entry (Country / System / MT code / ISO 20022 code), inlined here for the same
+    runtime-notes-isolation reason: Australia AU->AUBSB; Austria AT->ATBLZ; Canada CC->CACPA; China CN->CNAPS;
+    Germany BL->DEBLZ; Greece GR->GRHIC; Hong Kong HK->HKNCC; India IN->INFSC; Ireland IE->IENCC; Italy IT->ITNCC;
+    Japan JP->JPZGN; New Zealand NZ->NZNCC; Poland PL->PLKNR; Portugal PT->PTNCC; Russia RU->RUCBC; South Africa
+    ZA->ZANCC; Spain ES->ESNCC; Switzerland BC Code SW->CHBCC; Switzerland SIC Code SW->CHSIC (ambiguous, see
+    edge_cases); UK SC->GBDSC; US CHIPS CP->USPID; US Fedwire FW->USABA. DECISION PROCEDURE: take the 2-character MT
+    clearing-system code identified by the paired MmbId entry above; if it matches exactly one row in this table,
+    output that row's ISO 20022 code to Cd. If it matches zero rows, or matches the ambiguous "SW" case, produce no
+    value for Cd. TC24's own case: FW->USABA.
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "MT clearing-system code is not in the table, or is 'SW' (ambiguous)"
+    handling: "not an error - do not guess; Cd is left unpopulated rather than picking arbitrarily"
 
 - source_field: "71A"
   source_name: "Details of Charges"
   target_path: "CdtTrfTxInf.ChrgBr"
-  mandatory: false
+  mandatory: true
   transformation: code_list_lookup
   code_list:
     BEN: CRED
@@ -432,6 +819,10 @@ field_mappings:
     diagram (BEN->CRED, OUR->DEBT, SHA->SHAR) - complete code set per
     the page. Target-side SLEV has "no equivalent in legacy MT messages"
     and "is removed from CBPR+ usage guideline specifications."
+    v2.8 M/O CORRECTION: mandatory changed false->true, matching this entry's own edge_cases below, which already said
+    "reject - Min 1 - Max 1" while the mandatory: flag said false. Field 71A is unconditionally mandatory in every MT103
+    per the SWIFT MT103 Standards field table, confirmed by two independent public field-spec sources and already enforced
+    at the message level by VR005.
   edge_cases:
   - condition: "Value not one of BEN/OUR/SHA"
     handling: "reject - code_list is exhaustive, no fallback"
@@ -443,6 +834,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.ChrgsInf#0.Amt.@Ccy"
   mandatory: false
   transformation: direct_copy
+  repeat_lines: true
   extract_pattern: "^([A-Z]{3})"
   allowed_pattern: "^[A-Z]{3}$"
   notes: >-
@@ -454,6 +846,21 @@ field_mappings:
     Agt entry below. Split into three entries (currency, amount, agent) mirroring the 32A/33B composite-extraction pattern;
     "#0" marks this as the FIRST ChrgsInf occurrence (ChrgsInf is maxOccurs=unbounded) - 71G below uses "#1", so both can
     coexist as two separate repeated elements if both fields are present.
+    v2.17 BUG FIX (2026-09-04, from live test case TC07): field 71F is explicitly repetitive per the official SWIFT MT103
+    field spec ("This field may be repeated to specify to the Receiver the currency and amount of charges taken by
+    preceding banks in the transaction chain... the last occurrence always gives the Sender's charges") - but this entry
+    had no repetition handling at all. A message with 71F present twice crashed outright: MtParserService/ParsedMessage
+    newline-joins repeated tag occurrences into one raw value ("GBP15,00\nGBP15,00"), and extract_pattern's single-line
+    regex cannot match text containing an embedded newline, throwing TransformationException instead of translating.
+    Fixed by adding repeat_lines: true (see FieldMapping.repeatLines / ConverterService.applyRepeatedSimpleTransformation)
+    - each line of the repeated field is now extracted and transformed independently, producing N separate ChrgsInf
+    occurrences (ChrgsInf#0, ChrgsInf#1, ...) matching the source's own occurrence order, rather than crashing or
+    collapsing them into one. A single (non-repeated) 71F line still resolves to "#0" - byte-identical output to before
+    this fix, confirmed no regression for the already-tested single-occurrence case (TC05/TC06).
+    NOTE ON 71G: 71G is NOT given repeat_lines - the real SWIFT field spec's own text for 71G has no "repetitive"
+    language (unlike 71F's explicit statement above), and rule C14 makes 71F and 71G mutually exclusive in every valid
+    MT103 (OUR forbids 71F, SHA forbids 71G, BEN forbids 71G) - so 71F's growing "#0","#1",... indices can only ever
+    collide with 71G's fixed "#1" in an already rule-violating message, not in any valid one.
   conditional_rules:
   - condition: "ChrgBr = DEBT"
     handling: "UHB p.216: only one pre-paid occurrence valid; deducted charges invalid (VR002, not machine-checked - see that rule's notes)"
@@ -468,8 +875,11 @@ field_mappings:
   target_path: "CdtTrfTxInf.ChrgsInf#0.Amt"
   mandatory: false
   transformation: decimal_comma_to_dot
+  repeat_lines: true
   extract_pattern: "^[A-Z]{3}(.+)$"
-  notes: "Paired with the currency-portion entry above - see its notes."
+  notes: >-
+    Paired with the currency-portion entry above - see its notes, including the v2.17 repeat_lines fix (identical
+    reasoning applies here verbatim).
   edge_cases:
   - condition: "Remainder is not a valid comma-decimal number"
     handling: "reject - enforced by decimal_comma_to_dot"
@@ -481,6 +891,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.ChrgsInf#0.Agt.FinInstnId.BICFI"
   mandatory: false
   transformation: conditional
+  repeat_lines: true
   conditional:
     check_fields: ["71F"]
     if_any_present_field: "__MT_SENDER_BIC__"
@@ -490,6 +901,12 @@ field_mappings:
     mechanism checks check_fields against the full parsed source message regardless of which field this entry nominally
     reads from). Outputs the same __MT_SENDER_BIC__ value already used for the DbtrAgt/InstgAgt fallback entries -
     no new parsing needed, just a new consumer of the existing synthetic field.
+    v2.17 BUG FIX: repeat_lines added (see the currency-portion entry's notes) so this fires ONCE PER 71F occurrence
+    (each producing the same Sender BIC, since 71F's charging agent is always the Sender regardless of which repetition),
+    landing on the same "#N" index the paired currency/amount entries derive for that occurrence - see
+    ConverterService.applyRepeatedConditional. Previously this entry alone would have fired once for the whole message
+    even if the currency/amount entries had somehow (post-fix) produced multiple ChrgsInf blocks, leaving every
+    occurrence but the first without an Agt.
   edge_cases:
   - condition: "71F present but the MT header Sender cannot be determined"
     handling: "reject - Charges7/Agt is mandatory whenever ChrgsInf is populated at all, no other sourced fallback"
@@ -551,6 +968,7 @@ field_mappings:
       BICFI:
         rule: "regex:/INS/(\\S+)"
         optional: true
+        match_index: 0
     sub_element_targets:
       BICFI: "CdtTrfTxInf.PrvsInstgAgt1.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
@@ -578,6 +996,15 @@ field_mappings:
     fail, throwing SemanticDecompositionGapException and blocking the
     ENTIRE conversion. A real MT103 with field 72 present for a different
     purpose than /INS/ is a common, not edge, case.
+    v2.21 BUG FIX (2026-09-04, from live test case TC46): this entry's own note used to say
+    "UNVERIFIED: regex must target the SECOND occurrence specifically" (see the second /INS/
+    entry below) - now verified false. All three /INS/ entries ran the identical "/INS/(\S+)"
+    pattern with a plain find(), which always returns the FIRST match no matter which entry
+    asked - a message with exactly ONE /INS/ occurrence had that same BIC duplicated into
+    PrvsInstgAgt1, PrvsInstgAgt2, AND PrvsInstgAgt3 instead of only this one. Added
+    match_index: 0 (new engine mechanism - see DecompositionService's match_index branch) so
+    this entry explicitly claims the FIRST occurrence only; the second/third entries below now
+    claim index 1/2 and correctly produce no value when a second/third /INS/ isn't present.
   edge_cases:
   - condition: "No /INS/ occurrence present"
     handling: "not an error - Min 0"
@@ -590,12 +1017,14 @@ field_mappings:
   mandatory: false
   transformation: decompose_party
   decomposition:
-    pattern_description: "Same as first /INS/ above. UNVERIFIED: regex must target the SECOND occurrence specifically, not
-      just first-match - confirm TransformationEngine does occurrence-indexed matching."
+    pattern_description: "Same as first /INS/ above. Targets the SECOND occurrence specifically via match_index: 1
+      (v2.21 - see this entry's own notes) - previously unverified whether the engine did occurrence-indexed
+      matching at all; confirmed (via TC46) that it did not, now fixed."
     sub_elements:
       BICFI:
         rule: "regex:/INS/(\\S+)"
         optional: true
+        match_index: 1
     sub_element_targets:
       BICFI: "CdtTrfTxInf.PrvsInstgAgt2.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
@@ -604,6 +1033,10 @@ field_mappings:
     occurrence." v1.16 BUG FIX: see the first /INS/ entry's notes above -
     same double-suffix path bug, same fix. v1.22 BUG FIX: same
     missing-optional:true bug as the first /INS/ entry - see its notes.
+    v2.21 BUG FIX (TC46): added match_index: 1 - this entry's own note previously flagged
+    this exact gap as unverified ("confirm TransformationEngine does occurrence-indexed
+    matching"); it did not, and this entry was silently re-matching the FIRST /INS/
+    occurrence whenever only one existed. See the first /INS/ entry's v2.21 note above.
   edge_cases:
   - condition: "No second /INS/ occurrence"
     handling: "not an error - Min 0"
@@ -616,11 +1049,12 @@ field_mappings:
   mandatory: false
   transformation: decompose_party
   decomposition:
-    pattern_description: "Same occurrence-indexing caveat as second /INS/ above."
+    pattern_description: "Same as second /INS/ above, targeting the THIRD occurrence via match_index: 2 (v2.21)."
     sub_elements:
       BICFI:
         rule: "regex:/INS/(\\S+)"
         optional: true
+        match_index: 2
     sub_element_targets:
       BICFI: "CdtTrfTxInf.PrvsInstgAgt3.FinInstnId.BICFI"
     fallback_if_unparseable: raise_error
@@ -631,11 +1065,54 @@ field_mappings:
     v1.16 BUG FIX: see the first /INS/ entry's notes above - same
     double-suffix path bug, same fix. v1.22 BUG FIX: same
     missing-optional:true bug as the first /INS/ entry - see its notes.
+    v2.21 BUG FIX (TC46): added match_index: 2 - see the first /INS/ entry's v2.21 note above.
   edge_cases:
   - condition: "No third /INS/ occurrence"
     handling: "not an error - Min 0"
   - condition: "Third /INS/ without first/second"
     handling: "reject - do not guess ordering"
+
+- source_field: "72"
+  source_name: "Sender to Receiver Info - /ACC/ codeword (instruction for the Creditor Agent)"
+  target_path: "CdtTrfTxInf.InstrForCdtrAgt.InstrInf"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.9 GAP FIX: field 72 previously had entries for ONLY the /INS/ codeword (-> PrvsInstgAgt1/2/3 above) - every
+    other codeword's content was silently dropped, not carried forward anywhere. Confirmed as a real gap, not a
+    deliberate exclusion, by a concrete worked example in JPMorgan's "Migration to ISO 20022" guide (section 5.a,
+    MT103 -> pacs.008): source ":72:/ACC/Instruct for creditor agent\n/PRIORITY/\n/FND/" produced
+    "<InstrForCdtrAgt><InstrInf>Instruct for creditor agent</InstrInf></InstrForCdtrAgt>" in the actual pacs.008
+    output - i.e. the free text following the /ACC/ codeword (up to the next codeword or end of field) maps here.
+    TARGET2's Annex 5.1.1 is consistent with this in spirit ("None of the codes defined for use in MT field 72 are
+    individually mapped with exception of code /INS/") but doesn't name /ACC/ specifically - the JPMorgan worked
+    example is the concrete evidence for this exact codeword. DECISION PROCEDURE: scan field 72's lines/segments; if
+    one begins with the codeword /ACC/, output the text following it (up to the next "/CODE/" codeword or end of
+    field). If no /ACC/ segment exists, output nothing - not an error.
+  edge_cases:
+  - condition: "Field absent, or no /ACC/ codeword present"
+    handling: "not an error - InstrForCdtrAgt is optional; this entry simply produces no value"
+
+- source_field: "72"
+  source_name: "Sender to Receiver Info - remaining codeword content (not /INS/ or /ACC/)"
+  target_path: "CdtTrfTxInf.InstrForNxtAgt.InstrInf"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.9 GAP FIX: paired with the /ACC/ entry above - see its notes for the sourcing. The SAME JPMorgan worked
+    example's remaining codewords ("/PRIORITY/" and "/FND/", neither of which is /INS/ or /ACC/) were collected into
+    "<InstrForNxtAgt><InstrInf>/PRIORITY/ /FND/</InstrInf></InstrForNxtAgt>" - i.e. left as literal codeword text,
+    space-joined, NOT further interpreted or decoded (this document has no sourced meaning for /PRIORITY/ or /FND/
+    specifically, and does not invent one). DECISION PROCEDURE: scan field 72's lines/segments; collect every
+    segment that is NOT the /INS/ codeword (handled by the three PrvsInstgAgt entries above) and NOT the /ACC/
+    codeword (handled by the entry above), preserving their literal text, and join them with a single space. If no
+    such segments exist, output nothing - not an error. RESIDUAL GAP: only one worked example was available, and it
+    only demonstrates two codewords (/PRIORITY/, /FND/) with no trailing content of their own - a codeword carrying
+    its own free text after it (the way /ACC/ does) is unverified for this entry; treat this decision procedure as
+    correct for bare codewords only until a richer example is found.
+  edge_cases:
+  - condition: "Field absent, or every segment is /INS/ or /ACC/"
+    handling: "not an error - InstrForNxtAgt is optional; this entry simply produces no value"
 
 - source_field: "70"
   source_name: "Remittance Info - End To End Id portion (/ROC/ codeword)"
@@ -653,7 +1130,9 @@ field_mappings:
       Applying to MT103 forward conversion is extrapolation, not a
       direct citation.
     sub_elements:
-      EndToEndId: "regex:^/ROC/([^/]+)/"
+      EndToEndId:
+        rule: "regex:^/ROC/([^/]+)/"
+        optional: true
     sub_element_targets:
       EndToEndId: "CdtTrfTxInf.PmtId.EndToEndId"
     fallback_if_unparseable: raise_error
@@ -665,6 +1144,18 @@ field_mappings:
     this entry even when /ROC/ was present; every conversion silently
     fell through to the target_defaults NOTPROVIDED fallback instead.
     Same double-suffix bug as the 72/INS and 50A/59A-BIC entries.
+    v2.20 CRITICAL BUG FIX (2026-09-04, from live test cases TC35/36/39/40): the sub_elements.EndToEndId regex was a
+    BARE STRING, not the map form with optional: true - meaning DecompositionService.isOptional() returned false
+    for it regardless of this entry's OWN edge_cases already saying "Field doesn't begin /ROC/ -> not an error." Any
+    field 70 value NOT starting with "/ROC/" (a plain /INV/, /RFB/, /TSU/ reference, or a bare ISO 11649 RF
+    reference with no codeword at all - i.e. the vast majority of real-world field 70 usage, since /ROC/ is only one
+    of five defined codewords) failed to match, set allMatched=false, and fell through to the guided LLM fallback -
+    which, given this entry's own pattern_description ONLY describes the /ROC/ case, correctly (from the LLM's own
+    perspective) refused rather than guessed, throwing SemanticDecompositionGapException and rejecting the ENTIRE
+    message, not just this one optional field. This is the single most severe defect found in this document's own
+    testing to date - field 70 is optional and free-form by design, so a field 70 that merely doesn't start with
+    /ROC/ should never be able to reject an otherwise-valid message. Fixed by declaring optional: true, matching
+    what the edge_cases below already, correctly, said should happen.
   edge_cases:
   - condition: "Field doesn't begin /ROC/"
     handling: "not an error - entry doesn't fire; EndToEndId falls back to NOTPROVIDED default (UHB p.209)"
@@ -707,7 +1198,7 @@ field_mappings:
 - source_field: "23B"
   source_name: "Bank Operation Code"
   target_path: "CdtTrfTxInf.PmtTpInf.LclInstrm.Prtry"
-  mandatory: false
+  mandatory: true
   transformation: direct_copy
   notes: >-
     23B:CRED/SPAY/SSTD/SPRI/CRTS -> PmtTpInf/LclInstrm/Prtry is retained. This is corroborated by public ISO migration mapping
@@ -715,9 +1206,18 @@ field_mappings:
     However, the exact current CBPR+ field-level rule is maintained in Swift MyStandards/Translation Portal and is not publicly
     retrievable here; therefore this entry is NOT labelled as directly Swift-portal-certified. Do not remap 23B to SvcLvl/Cd:
     that would be a closed ISO code-list guess.
+    v2.8 M/O CORRECTION: mandatory changed false->true. Field 23B (Bank Operation Code) is unconditionally mandatory in every
+    MT103 per the SWIFT MT103 Standards field table - confirmed consistently by two independent public field-spec sources
+    (Paiementor's MT103 format specification table and iotafinance's MT103 detail view), and already independently enforced
+    at the message level by this document's own VR005 (source_alternative_group_required, required_source_fields includes
+    "23B"). This entry's own mandatory flag was left at the old placeholder false despite that - now corrected to match,
+    giving a second, field-level layer of the same protection VR005 already provides at the message level (same
+    defense-in-depth pattern as VR006). See the superseded "M/O status" known_limitations entry for why every field was
+    originally left false.
   edge_cases:
   - condition: "Field absent"
-    handling: "not an error per general MT103 convention; M/O status not verified against an attached spec"
+    handling: "reject - field 23B is unconditionally mandatory per the SWIFT MT103 standard (v2.8); also caught earlier,
+      pre-conversion, by VR005 via ConversionOrchestrator.checkMandatorySourceFields()"
   - condition: "Value contains characters invalid for LclInstrm/Prtry per the pacs.008 XSD"
     handling: "reject - do not silently strip or re-encode; no sourced rule for how to handle this"
 
@@ -748,12 +1248,34 @@ field_mappings:
     handling: "not an error; M/O unverified"
 
 - source_field: "50A"
-  source_name: "Ordering Customer, option A - account portion"
+  source_name: "Ordering Customer, option A - account portion, IBAN branch"
+  target_path: "CdtTrfTxInf.DbtrAcct.Id.IBAN"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.11 SOURCED CORRECTION: previously a single entry always routed the account to DbtrAcct/Id/Othr/Id regardless
+    of shape. Confirmed directly against pacs.008.001.08.xsd: AccountIdentification4Choice is a genuine xs:choice
+    between IBAN (type IBAN2007Identifier, pattern "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}") and Othr (a generic
+    identifier) - NOT an "always use Othr" structure. Forcing every account into Othr/Id, even a structurally valid
+    IBAN, is not idiomatic ISO 20022 usage and discards information the schema has a dedicated, more specific place
+    for. Split into two mutually exclusive entries. DECISION PROCEDURE: extract the account exactly as before (a
+    line beginning with '/', everything after the slash); if that extracted value matches the IBAN pattern above in
+    full, output it here. Otherwise produce no value (see the Othr/Id entry below instead). NOTE: this is a
+    structural pattern check only, not a full ISO 7064 mod-97 checksum validation - a string that merely LOOKS like
+    an IBAN (right shape, wrong checksum) will still be routed here; this document does not attempt checksum
+    validation, consistent with its "no invented complexity beyond what's sourced" stance.
+  edge_cases:
+  - condition: "No account line present, or account content does not match the IBAN pattern"
+    handling: "not an error - see the Othr/Id entry below, which handles the non-IBAN case instead"
+
+- source_field: "50A"
+  source_name: "Ordering Customer, option A - account portion, generic (non-IBAN) branch"
   target_path: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
   mandatory: false
   transformation: llm_assisted
   notes: >
-    Source: user-provided. STRUCTURAL FIX (v1.7): previously
+    v2.11: paired with the IBAN entry above - the two are mutually exclusive by design. Source: user-provided.
+    STRUCTURAL FIX (v1.7): previously
     decompose_party, which this schema hard-locks to raise on any
     non-match ("no other fallback is implemented" per the schema's own
     definition) - there is no way for that transformation type to
@@ -764,7 +1286,8 @@ field_mappings:
     llm_assisted, which has no fallback_if_unparseable mechanism at
     all - there is nothing to force a raise. DECISION PROCEDURE
     (verbatim, for the conversion-time LLM step): "Look at the raw MT
-    field 50A value. If any line begins with '/', output everything
+    field 50A value. If any line begins with '/', and the content after the '/' does NOT match the IBAN pattern
+    [A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30} in full, output everything
     after the '/' on that line as the account identifier. If no line
     begins with '/', output nothing (empty/null) - this means no
     account is present, which is normal and not an error. Do not guess
@@ -774,23 +1297,171 @@ field_mappings:
     handling: "not an error - this entry produces no value; DbtrAcct is left unpopulated from this source"
   - condition: "Leading slash present with empty content after it"
     handling: "reject - genuinely malformed, distinct from no-account-line-at-all"
+  - condition: "Account content matches the IBAN pattern"
+    handling: "not an error here - see the IBAN entry above, which handles that case instead"
 
 - source_field: "50F"
-  source_name: "Ordering Customer, option F - account portion only"
-  target_path: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+  source_name: "Ordering Customer, option F - full decomposition (account, name, structured address)"
+  target_path: "CdtTrfTxInf.Dbtr"
   mandatory: false
-  transformation: llm_assisted
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      ENGINE FIX (v2.15, 2026-09-03): previously six separate llm_assisted entries (account IBAN/Othr split, plus
+      one llm_assisted call per numbered line). Consolidated into one decompose_party entry, mirroring the already
+      -proven 50K/bare-59 pattern (strip_account_line_prefix + conditional_sub_element_targets for IBAN-vs-Othr
+      routing, structured_address for libpostal enrichment) instead of leaving 50F as the only customer-party field
+      not using this document's own established mechanism. Numbered-line format (1/=Name, 2/=AddressLine,
+      3/=Country+TownName) per TARGET2 Annex 5.1.2 and JPMorgan's worked example (already cited in the prior
+      version, retained). Name/Ctry/TwnNm extraction is now deterministic regex, not an LLM call - the position is
+      fixed once a line is confirmed to start with "1/"/"2/"/"3/", the same reasoning the prior version already gave
+      for using extract_pattern on the Ctry sub-entry specifically, now applied consistently to all three.
+      SOURCED CORRECTION (Bank of America "PACS 008 and MT 103 Commercial payments formatting guide," fetched and
+      read directly 2026-09-03): its own 50F worked example (":50F:/12345678\n1/ABC Corporation\n2/123 Main
+      Street\n3/ISO Country Code /\nAnytown, State,\n55555") resolves to FULLY STRUCTURED PstlAdr
+      (StrtNm/TwnNm/PstCd/Ctry), not a single unstructured AdrLine - confirming structured output is the correct
+      target shape now, not merely a November 2026 future requirement as an earlier review of this field assumed.
+      AdrLine is still populated too, unchanged - this document's existing "hybrid address" policy (see the ADDRESS
+      POLICY note and the 50K/bare-59 entries) adds structured fields ALONGSIDE the free-text fallback, never
+      instead of it.
+      Country/TownName stay on the deterministic line-3 regex (more reliable than a general-purpose address parser
+      for a field that explicitly names its own country code). Street/PostCode have no equivalent deterministic
+      source in the numbered-line format - line 2 is free text, and no corroborating source for a dedicated
+      building/postcode line was ever found for 50F specifically (same RESIDUAL GAP already noted for lines 4-8) -
+      so ONLY those two are routed through the same libpostal structured_address enrichment 50K/bare-59 already use,
+      opt-in and confidence-gated.
+      IMPORTANT, checked deliberately: structured_address.targets below does NOT include city/country even though
+      ParsedAddress can produce them. ConverterService.enrichWithStructuredAddress() unconditionally overwrites
+      whatever is already at a target_path (tree.put(), not put-if-absent) - mapping city/country there too would
+      let a less-certain libpostal guess silently clobber the more-certain, directly-cited line-3 regex extraction
+      above. This was checked against the actual ConverterService code, not assumed.
+      v2.18 BUG FIX (2026-09-04, from live test case TC14): the SWIFT field spec explicitly permits numbers 1, 2 and
+      3 to repeat (max twice each) - a two-line street address is a realistic, spec-legal input (e.g. "2/INDUSTRIE
+      STRASSE 45" then "2/GEBAUDE C, 3RD FLOOR"). DecompositionService's regex sub_elements previously used
+      Matcher.find() once, silently discarding every occurrence after the first. AdrLine's rule now sets
+      all_matches: true (new opt-in flag, see DecompositionService), producing AdrLine#0/AdrLine#1/... via the same
+      "#N" repeated-element convention lines_from already uses for 50K/bare-59 - both lines now survive.
+      Deliberately NOT applied to Nm or Ctry/TwnNm: a repeated "1/" or "3/" line is meant to be concatenated into one
+      longer value (Dbtr/Nm and Dbtr/PstlAdr/Ctry are not repeatable in the XSD - splitting them into multiple
+      elements would produce invalid XML), not split into separate elements the way AdrLine genuinely can be
+      (PostalAddress24/AdrLine is maxOccurs=7). No worked example or citation for HOW to concatenate a repeated
+      Nm/Ctry/TwnNm was found, so that case remains unhandled (single occurrence still works; a second occurrence of
+      "1/" or "3/" is silently dropped, same as before) rather than guessed at.
+      v2.18 GAP FIX (2026-09-04, from live test cases TC13/TC15/TC16): two previously entirely-unimplemented parts of
+      field 50a's own official SWIFT spec, now added using the exact citations already fetched and read directly
+      this session (Standards MT November 2021, section 9 "Field 50a: Ordering Customer"):
+      (1) Subfield 1 (Party Identifier) in the "(Code)(Country Code)(Identifier)" format - one line, e.g.
+      "CCPT/US/AB1234567" (format "4!a/2!a/27x") - codes ARNU/CCPT/CUST/DRLC/EMPL/NIDN/SOSE/TXID. Routed to
+      Dbtr/Id/PrvtId/Othr per pacs.008.001.08.xsd's real Party38Choice (OrgId|PrvtId) - GenericPersonIdentification1
+      = {Id, SchmeNm?, Issr?}. IdNumber->Othr/Id, IdCode->Othr/SchmeNm/Prtry (NOT SchmeNm/Cd - Cd is typed
+      ExternalPersonIdentification1Code, an ISO EXTERNAL code list this document has no verified MT-code-to-ISO-code
+      table for; Prtry is the correct choice-branch for "not drawn from the enumerated external list," and preserves
+      the exact SWIFT codeword unambiguously rather than guessing an ISO equivalent), IdCountry->Othr/Issr (a
+      reasonable, but NOT directly-cited, structural placement for "which country's registry issued this identifier"
+      - Issr is generic Max35Text, not a dedicated country-code element; flagged as a judgment call, not a worked
+      example).
+      (2) Numbers 4 (Date of Birth, format YYYYMMDD) and 5 (Place of Birth, "ISO country code, slash, place") ->
+      Dbtr/Id/PrvtId/DtAndPlcOfBirth (BirthDt/CityOfBirth/CtryOfBirth all mandatory per DateAndPlaceOfBirth1's XSD
+      when that element is used at all). BirthDt reformatted YYYYMMDD->YYYY-MM-DD via the new regex_date_yyyymmdd:
+      rule (ISODate requires dashes; the raw MT value has none - see DecompositionService). The SWIFT spec's own
+      pairing rule ("Number 4 must not be used without number 5 and vice versa") is NOT enforceable inside this
+      per-sub-element-independently-optional decomposition model - each of the three DtAndPlcOfBirth sub-elements is
+      independently optional here, so a message violating the pairing would otherwise silently produce a PARTIALLY
+      populated (and therefore XSD-invalid) DtAndPlcOfBirth. Enforced instead post-conversion via VR010 (new
+      target_presence_requires_target_presence rule), which rejects that case with a clear validation error rather
+      than emitting invalid XML.
+      Deliberately NOT extended to 59F: the fetched SWIFT spec's own CODES section for field 59a documents only
+      numbers 1/2/3 (Name/AddressLine/Country+Town) - it does NOT repeat the identity-code or DOB/POB table for 59a
+      the way it does for 50a. Adding this to 59F would be an unsourced extrapolation, the exact "by analogy, lower
+      confidence" pattern this document has already been burned by once (see 59F's own v2.15/v2.16 changelog) and is
+      now deliberately avoiding.
+      v2.20 BUG FIX (2026-09-04, from live test case TC32): Ctry's regex required a TRAILING slash ("^3/([A-Z]{2})/"),
+      implicitly requiring a town to follow - but the spec explicitly says number 3's town detail is optional ("the
+      first occurrence of number 3 must be followed by... the ISO country code and, OPTIONALLY, additional
+      details"). A bare "3/SG" (country, no town) silently failed to match (optional:true meant this wasn't a hard
+      failure, just silent data loss - Ctry simply never appeared). Fixed to "^3/([A-Z]{2})(?:/|$)", accepting the
+      country code at end-of-line OR followed by "/" and more content.
+      v2.20 GAP FIX (from live test case TC34): repeated "1/" (Name) lines - explicitly permitted by the spec
+      ("Numbers 1, 2, and 3 may be repeated") - were previously silently dropped after the first occurrence (same
+      class of bug as TC14's AdrLine issue, but Nm can't use all_matches: true since Dbtr/Nm is not repeatable in
+      the XSD). Nm now uses the new concat: true flag (see DecompositionService) - all matches space-joined into
+      ONE value instead of split into multiple elements or dropped.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm:
+        rule: "regex:^1/(.+)$"
+        optional: true
+        concat: true
+      AdrLine:
+        rule: "regex:^2/(.+)$"
+        optional: true
+        all_matches: true
+      Ctry:
+        rule: "regex:^3/([A-Z]{2})(?:/|$)"
+        optional: true
+      TwnNm:
+        rule: "regex:^3/[A-Z]{2}/(.+)$"
+        optional: true
+      IdCode:
+        rule: "regex:^(ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/[A-Z]{2}/.+$"
+        optional: true
+      IdCountry:
+        rule: "regex:^(?:ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/([A-Z]{2})/.+$"
+        optional: true
+      IdNumber:
+        rule: "regex:^(?:ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/[A-Z]{2}/(.+)$"
+        optional: true
+      BirthDt:
+        rule: "regex_date_yyyymmdd:^4/(\\d{8})$"
+        optional: true
+      CtryOfBirth:
+        rule: "regex:^5/([A-Z]{2})/"
+        optional: true
+      CityOfBirth:
+        rule: "regex:^5/[A-Z]{2}/(.+)$"
+        optional: true
+    sub_element_targets:
+      Nm: "CdtTrfTxInf.Dbtr.Nm"
+      AdrLine: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
+      Ctry: "CdtTrfTxInf.Dbtr.PstlAdr.Ctry"
+      TwnNm: "CdtTrfTxInf.Dbtr.PstlAdr.TwnNm"
+      IdCode: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.SchmeNm.Prtry"
+      IdCountry: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Issr"
+      IdNumber: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Id"
+      BirthDt: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt"
+      CtryOfBirth: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth"
+      CityOfBirth: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CityOfBirth"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.DbtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Dbtr.PstlAdr.StrtNm"
+        postcode: "CdtTrfTxInf.Dbtr.PstlAdr.PstCd"
+    fallback_if_unparseable: raise_error
   notes: >-
-    Numbered F-option customer data is structured MT data. The account portion may be copied to the corresponding Account/Id/Othr/Id,
-    but a successful conversion must also preserve the numbered name/address data. This mapping document does not invent a
-    postal decomposition for ambiguous 3/ lines; until the engine supports the exact CBPR+ hybrid-address extraction contract,
-    a message using F-option data that cannot be structurally preserved must fail rather than silently dropping the customer
-    identity/address.
+    RESIDUAL GAP (unchanged from the prior version): TARGET2's Annex 5.1.2 also documents numbered lines 4-8 for
+    50F (BirthDate, CountryOfBirth/CityOfBirth, PrivateIdentification/Other with scheme codes) - NOT implemented
+    here; that part of the source table had layout/ordering issues and no corroborating worked example, so
+    implementing it would have been a guess. StrtNm/PstCd depend on the address-parser sidecar being enabled and
+    confident (mtmx.address-parser-enabled) - if disabled or unreachable, AdrLine alone is still populated, exactly
+    today's behavior; this is a strict enhancement, never a regression path.
   edge_cases:
   - condition: "No account line present"
-    handling: "not an error - this entry produces no value; expected for the common case of a name/address-only 50F value"
+    handling: "not an error - AccountId is simply left unpopulated from this source, the common case"
   - condition: "Leading slash present with empty content after it"
     handling: "reject - genuinely malformed, distinct from no-account-line-at-all"
+  - condition: "Field absent, or no line begins with '1/'/'2/'/'3/'"
+    handling: "not an error - the corresponding sub-element simply produces no value"
+  - condition: "Line begins with '3/' but is not followed by a 2-letter uppercase country code"
+    handling: "reject - do not guess the country"
+  - condition: "Address parser sidecar disabled, unreachable, or not confident"
+    handling: "not an error - StrtNm/PstCd simply stay unpopulated; AdrLine (already written) is unaffected"
 
 - source_field: "50K"
   source_name: "Ordering Customer, option K - name/address portion"
@@ -803,17 +1474,29 @@ field_mappings:
       MT103 field 50K (Ordering Customer) maps to pacs.008 Dbtr -
       name/address, not just the account portion the entry above
       already extracts. 50K carries PLAIN unstructured lines (unlike
-      50F's numbered 1/2/3/ line-code convention, which this document
-      still does not cover - see known_limitations), so: first
-      non-account line = Nm; every remaining line = its own repeated
-      AdrLine (PostalAddress24/AdrLine, maxOccurs=7). EXPLICITLY NOT
-      decomposing address text into TwnNm/Ctry/PstCd/etc - those are
-      not discrete data in the MT103, and inventing that structure from
-      free text would be a guess, not a mapping. This also matters given
-      SWIFT's move away from unstructured postal addresses in CBPR+
-      (effective November 2026) - Town/Country will need to come from
-      designated fields once available, not be parsed out of AdrLine
-      text.
+      50F's numbered 1/2/3/ line-code convention - see the 50F entry
+      above), so: first non-account line = Nm; every remaining line =
+      its own repeated AdrLine (PostalAddress24/AdrLine, maxOccurs=7).
+      CORRECTION (v2.15, 2026-09-03): this note previously said
+      "EXPLICITLY NOT decomposing address text into TwnNm/Ctry/PstCd" -
+      stale prose left behind when the structured_address block below
+      was added; the two directly contradicted each other. This entry
+      DOES now derive StrtNm/PstCd via the libpostal structured_address
+      sidecar (see structured_address below), confidence-gated and
+      additive to AdrLine, never replacing it - the "hybrid address"
+      model SWIFT requires from 14 November 2026 (structured fields
+      ALONGSIDE unstructured AdrLine, confirmed against the Bank of
+      America PACS008/MT103 guide's own Annexure 1). Unlike the new
+      50F/59F entries, City/Country ARE included in
+      structured_address.targets below - 50K has no numbered-line
+      convention and therefore no deterministic alternate source for
+      TwnNm/Ctry at all, so there is nothing for a libpostal guess to
+      conflict with here (the overwrite risk documented on the 50F
+      entry applies specifically to fields that ALSO extract Ctry/TwnNm
+      deterministically from elsewhere, which 50K does not). What IS
+      still true: no NUMBERED-LINE convention (50F's 1/2/3/) is assumed
+      here - 50K is genuinely free text, and only the libpostal parser
+      (not this document's own logic) infers any structure from it.
     strip_account_line_prefix: true
     account_line_pattern: "^/(.+)$"
     account_sub_element: "AccountId"
@@ -823,8 +1506,19 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      AccountId: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
       AdrLine: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.DbtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Dbtr.PstlAdr.StrtNm"
+        city: "CdtTrfTxInf.Dbtr.PstlAdr.TwnNm"
+        postcode: "CdtTrfTxInf.Dbtr.PstlAdr.PstCd"
+        country: "CdtTrfTxInf.Dbtr.PstlAdr.Ctry"
     fallback_if_unparseable: raise_error
   notes: >-
     v1.16 GAP FIX: this document previously had NO entry populating Dbtr.Nm/PstlAdr for 50K at all - only a separate
@@ -867,6 +1561,12 @@ field_mappings:
       behavior, and the same "no other fallback implemented" constraint
       applies if it ever fails to match at all (e.g. genuinely empty
       field content).
+      v2.16 SOURCING (2026-09-03): the real SWIFT "Standards MT November 2021" MT103 Message Reference Guide (fetched and
+      read directly, section 17 "Field 59a: Beneficiary Customer") gives the exact FORMAT table for option A, verbatim:
+      "[/34x] (Account)" then "4!a2!a2!c[3!c] (Identifier Code)" - i.e. an optional account line followed ONLY by a BIC;
+      no name/address subfield exists in option A at all. This directly confirms BIC-only routing to Cdtr/Id/OrgId/AnyBIC
+      is structurally correct per the official field definition, independent of the still-open engine-verification caveat
+      above (which is about THIS regex's execution behavior, not about whether the mapping itself is sourced).
     sub_elements:
       BIC: "regex:(?:^/.+\\n)?(\\S+)$"
     sub_element_targets:
@@ -875,7 +1575,10 @@ field_mappings:
   notes: >
     Split into per-option entries (59/59A/59F) same as Field 50.
     UNVERIFIED against the engine - see decomposition.pattern_description
-    caveat. v1.16 BUG FIX: without the override above, this entry's
+    caveat (this is about the regex's actual runtime behavior, not about
+    sourcing - the option-A BIC-only shape itself is now confirmed
+    against the official SWIFT MT103 field spec, see v2.16 note above).
+    v1.16 BUG FIX: without the override above, this entry's
     actual output path was 'CdtTrfTxInf.Cdtr.Id.OrgId.AnyBIC.BIC' - same
     double-suffix bug as the 50A-BIC entry; Cdtr's BIC was never
     actually populated by this entry before this fix.
@@ -886,16 +1589,34 @@ field_mappings:
     handling: "not an error"
 
 - source_field: "59A"
-  source_name: "Beneficiary Customer, option A - account portion"
+  source_name: "Beneficiary Customer, option A - account portion, IBAN branch"
+  target_path: "CdtTrfTxInf.CdtrAcct.Id.IBAN"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.11 SOURCED CORRECTION: mirrors the 50A IBAN-branch entry - see its notes for the full XSD citation
+    (AccountIdentification4Choice is a genuine IBAN|Othr xs:choice, confirmed directly against pacs.008.001.08.xsd).
+    DECISION PROCEDURE: extract the account exactly as before (a line beginning with '/', everything after the
+    slash); if that extracted value matches the IBAN pattern "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}" in full, output it
+    here. Otherwise produce no value (see the Othr/Id entry below instead). Structural pattern check only, not a
+    mod-97 checksum validation - same caveat as the 50A entry.
+  edge_cases:
+  - condition: "No account line present, or account content does not match the IBAN pattern"
+    handling: "not an error - see the Othr/Id entry below, which handles the non-IBAN case instead"
+
+- source_field: "59A"
+  source_name: "Beneficiary Customer, option A - account portion, generic (non-IBAN) branch"
   target_path: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
   mandatory: false
   transformation: llm_assisted
   notes: >
-    Source: user-provided. STRUCTURAL FIX (v1.7): same rationale as the
+    v2.11: paired with the IBAN entry above - the two are mutually exclusive by design. Source: user-provided.
+    STRUCTURAL FIX (v1.7): same rationale as the
     50A account entry - moved off decompose_party after the v1.4
     documentation-only fix failed to change actual behavior for the
     analogous 50K entry. DECISION PROCEDURE (verbatim): "Look at the raw
-    MT field 59A value. If any line begins with '/', output everything
+    MT field 59A value. If any line begins with '/', and the content after the '/' does NOT match the IBAN pattern
+    [A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30} in full, output everything
     after the '/' on that line as the account identifier. If no line
     begins with '/', output nothing - this is normal and not an error.
     Do not guess or fabricate an account identifier."
@@ -904,6 +1625,8 @@ field_mappings:
     handling: "not an error - this entry produces no value"
   - condition: "Leading slash present with empty content after it"
     handling: "reject - genuinely malformed"
+  - condition: "Account content matches the IBAN pattern"
+    handling: "not an error here - see the IBAN entry above, which handles that case instead"
 
 - source_field: "59"
   source_name: "Beneficiary Customer, no letter - name/address portion"
@@ -916,11 +1639,16 @@ field_mappings:
       MT103 field 59 (no letter, Beneficiary Customer) maps to
       pacs.008 Cdtr - name/address, not just the account portion the
       entry above already extracts. Same PLAIN unstructured-line shape
-      as 50K (unlike 59F's numbered-line convention, still not covered
-      - see known_limitations): first non-account line = Nm; every
-      remaining line = its own repeated AdrLine. Same explicit
-      exclusion as the 50K entry: NOT decomposing address text into
-      TwnNm/Ctry/PstCd/etc.
+      as 50K (unlike 59F's numbered-line convention - see the 59F
+      entry): first non-account line = Nm; every remaining line = its
+      own repeated AdrLine. CORRECTION (v2.15, 2026-09-03): see the
+      50K entry's identical correction - this note previously said
+      "NOT decomposing... TwnNm/Ctry/PstCd," which contradicted the
+      structured_address block below (already present, now accurately
+      described). Same reasoning as 50K applies verbatim: no
+      deterministic alternate source for TwnNm/Ctry exists for bare 59
+      either, so including city/country in structured_address.targets
+      here carries no overwrite risk.
     strip_account_line_prefix: true
     account_line_pattern: "^/(.+)$"
     account_sub_element: "AccountId"
@@ -930,8 +1658,19 @@ field_mappings:
         rule: "lines_from:1"
         optional: true
     sub_element_targets:
-      AccountId: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
       AdrLine: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.CdtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Cdtr.PstlAdr.StrtNm"
+        city: "CdtTrfTxInf.Cdtr.PstlAdr.TwnNm"
+        postcode: "CdtTrfTxInf.Cdtr.PstlAdr.PstCd"
+        country: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
     fallback_if_unparseable: raise_error
   notes: >-
     v1.16 GAP FIX: mirrors the 50K Dbtr entry above - this document previously had no entry populating Cdtr.Nm/PstlAdr for
@@ -956,19 +1695,78 @@ field_mappings:
     handling: "reject - genuinely malformed account line, distinct from 'no account line present at all'"
 
 - source_field: "59F"
-  source_name: "Beneficiary Customer, option F - account portion only"
-  target_path: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+  source_name: "Beneficiary Customer, option F - full decomposition (account, name, structured address)"
+  target_path: "CdtTrfTxInf.Cdtr"
   mandatory: false
-  transformation: llm_assisted
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      ENGINE FIX (v2.15, 2026-09-03): mirrors the 50F consolidation above exactly (same numbered-line shape, same
+      account IBAN/Othr split, same reasons) - see that entry's notes for the full rationale, not repeated here.
+      SOURCED CORRECTION (Bank of America "PACS 008 and MT 103 Commercial payments formatting guide," fetched and
+      read directly 2026-09-03): its own 59F worked example (":59F:/AA24BBBB11111111111111\n1/ABC
+      Corporation\n2/Street Name,Building11,\n3/IN/Town Name\n3/ Post Code1") resolves to a FULLY STRUCTURED PstlAdr
+      (StrtNm/BldgNb/PstCd/TwnNm/Ctry) - this is a directly-cited 59F-specific worked example, not the by-analogy
+      extrapolation-from-50F the prior version of this entry explicitly flagged as lower confidence. That caveat is
+      now resolved for the numbered-line shape itself (confirmed real, not assumed); Street/PostCode still route
+      through the libpostal structured_address enrichment rather than hand-parsing this example's own comma-based
+      Street/BuildingNumber split, since ParsedAddress has no separate building-number field to populate BldgNb
+      correctly either way, and re-deriving an ad hoc comma-splitter from one worked example would risk guessing
+      beyond what's actually evidenced.
+      Country/TownName stay on the deterministic line-3 regex, same reasoning as 50F. structured_address.targets
+      deliberately excludes city/country for the identical overwrite-risk reason documented on the 50F entry.
+      v2.18 BUG FIX (2026-09-04): AdrLine's all_matches: true added - identical rationale as 50F's own v2.18 note
+      (repeated "2/" lines are spec-legal and were previously silently dropped after the first).
+      v2.20 BUG FIX (from live test case TC34, which specifically exercises 59F): Ctry's regex fixed to make the
+      trailing town-detail optional ("^3/([A-Z]{2})(?:/|$)", was requiring a trailing "/"), and Nm gained
+      concat: true - identical rationale as 50F's own v2.20 note, not repeated here.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm:
+        rule: "regex:^1/(.+)$"
+        optional: true
+        concat: true
+      AdrLine:
+        rule: "regex:^2/(.+)$"
+        optional: true
+        all_matches: true
+      Ctry:
+        rule: "regex:^3/([A-Z]{2})(?:/|$)"
+        optional: true
+      TwnNm:
+        rule: "regex:^3/[A-Z]{2}/(.+)$"
+        optional: true
+    sub_element_targets:
+      Nm: "CdtTrfTxInf.Cdtr.Nm"
+      AdrLine: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
+      Ctry: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
+      TwnNm: "CdtTrfTxInf.Cdtr.PstlAdr.TwnNm"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.CdtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Cdtr.PstlAdr.StrtNm"
+        postcode: "CdtTrfTxInf.Cdtr.PstlAdr.PstCd"
+    fallback_if_unparseable: raise_error
   notes: >-
-    Numbered F-option customer data is structured MT data. The account portion may be copied to the corresponding Account/Id/Othr/Id,
-    but a successful conversion must also preserve the numbered name/address data. This mapping document does not invent a
-    postal decomposition for ambiguous 3/ lines; until the engine supports the exact CBPR+ hybrid-address extraction contract,
-    a message using F-option data that cannot be structurally preserved must fail rather than silently dropping the customer
-    identity/address.
+    RESIDUAL GAP (unchanged): numbered lines 4-8 not implemented, same reasoning as 50F. BuildingNumber (BldgNb) is
+    not populated by either the deterministic regex or the libpostal enrichment - genuinely unimplemented, not
+    silently dropped from a value that was already extracted.
   edge_cases:
   - condition: "No account line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - AccountId is simply left unpopulated, the common case"
+  - condition: "Field absent, or no line begins with '1/'/'2/'/'3/'"
+    handling: "not an error - the corresponding sub-element simply produces no value"
+  - condition: "Line begins with '3/' but is not followed by a 2-letter uppercase country code"
+    handling: "reject - do not guess the country"
+  - condition: "Address parser sidecar disabled, unreachable, or not confident"
+    handling: "not an error - StrtNm/PstCd simply stay unpopulated; AdrLine (already written) is unaffected"
 
 - source_field: "33B"
   source_name: "Currency/Instructed Amount - currency portion"
@@ -986,11 +1784,17 @@ field_mappings:
     attribute, not a child element), and a single llm_assisted call is
     structurally incapable of populating both the attribute and the
     text content. See the 32A entries' notes for the full rationale.
-    Source: user-provided instruction, not attached material - zero
-    citation hits for "Field 33B" anywhere in the UHB pacs.008 section.
-    UHB p.214 describes the target element's own rule (VR001) without
-    naming the source MT tag - that citation supports the target
-    element's behavior, not this source-to-target mapping.
+    Source (v1.11-v2.15): user-provided instruction, not attached material - zero citation hits for "Field 33B" anywhere in
+    the UHB pacs.008 section. UHB p.214 describes the target element's own rule (VR001) without naming the source MT tag -
+    that citation supports the target element's behavior, not this source-to-target mapping.
+    v2.16 SOURCING (2026-09-03): resolved - the real SWIFT "Standards MT November 2021" MT103 Message Reference Guide
+    (fetched and read directly, section 7 "Field 33B: Currency/Instructed Amount") confirms Field 33B is a genuine MT103
+    field, format 3!a15d, Presence "Conditional (see rules C2, C15)" - not unconditionally mandatory nor unconditionally
+    optional. Rule C1 (page 5, verbatim): "If field 33B is present and the currency code is different from the currency
+    code in field 32A, field 36 must be present, otherwise field 36 is not allowed" - this is the actual source for VR001,
+    not merely UHB p.214's target-side paraphrase. Note VR001 currently only checks the "36 becomes mandatory" direction
+    of C1, not the "36 not allowed when currencies match" direction - a real, disclosed gap this sourcing exposes but does
+    not fix here.
   conditional_rules:
   - condition: "InstdAmt currency differs from IntrBkSttlmAmt currency"
     handling: "XchgRate becomes mandatory on the target side (VR001) - not enforced by this entry, see validation_rules"
@@ -998,7 +1802,7 @@ field_mappings:
   - condition: "First 3 characters not 3 uppercase letters"
     handling: "reject - do not guess currency (enforced by allowed_pattern)"
   - condition: "Field absent"
-    handling: "not an error - 33B is conditional in MT103; M/O status unverified against an attached spec"
+    handling: "not an error - 33B is genuinely conditional per SWIFT rule C2 (mandatory only when both Sender and Receiver BICs are in a specific EU/EEA-adjacent country list), not universally mandatory"
 
 - source_field: "33B"
   source_name: "Currency/Instructed Amount - amount portion"
@@ -1012,6 +1816,8 @@ field_mappings:
     decimal_comma_to_dot transformation, applied to whatever
     extract_pattern pulls out past the 3-letter currency prefix -
     deterministic, no LLM needed.
+    v2.16 SOURCING: see the paired currency-portion entry above for the now-confirmed SWIFT Field 33B citation (format
+    3!a15d, Presence Conditional per rules C2/C15) - applies identically here.
   conditional_rules:
   - condition: "InstdAmt currency differs from IntrBkSttlmAmt currency"
     handling: "XchgRate becomes mandatory on the target side (VR001) - not enforced by this entry, see validation_rules"
@@ -1019,7 +1825,7 @@ field_mappings:
   - condition: "Remainder is not a valid comma-decimal number"
     handling: "reject - enforced by decimal_comma_to_dot"
   - condition: "Field absent"
-    handling: "not an error - 33B is conditional in MT103; M/O status unverified against an attached spec"
+    handling: "not an error - 33B is genuinely conditional per SWIFT rule C2, not universally mandatory"
 
 - source_field: "36"
   source_name: "Exchange Rate"
@@ -1038,11 +1844,13 @@ field_mappings:
     valid xs:decimal syntax) - this would have failed XSD validation the
     first time a real message carried field 36, the same class of bug
     as the 32A/33B Ccy-attribute issue, just not yet triggered because
-    no test message had exercised field 36. Source: user-provided
-    instruction, not attached material - zero citation hits for "Field
-    36" anywhere in the UHB pacs.008 section. UHB p.214's cross-element
-    rule (VR001) describes the target element's own behavior without
-    naming the source MT tag.
+    no test message had exercised field 36. Source (v1.11-v2.15): user-provided instruction, not attached material - zero
+    citation hits for "Field 36" anywhere in the UHB pacs.008 section. UHB p.214's cross-element rule (VR001) describes the
+    target element's own behavior without naming the source MT tag.
+    v2.16 SOURCING (2026-09-03): resolved - the real SWIFT "Standards MT November 2021" MT103 Message Reference Guide
+    (fetched and read directly, section 8 "Field 36: Exchange Rate") confirms Field 36 is a genuine MT103 field, format
+    12d, Presence "Conditional (see rule C1)" - the same rule C1 already cited on the paired 33B entries. Worked example
+    given in the spec: ":36:0,9236" - a plain comma-decimal, consistent with this entry's decimal_comma_to_dot handling.
   conditional_rules:
   - condition: "InstdAmt present with currency differing from IntrBkSttlmAmt"
     handling: "this field becomes mandatory per VR001 - not enforced by this entry"
@@ -1057,14 +1865,90 @@ field_mappings:
   source_name: "Account With Institution (option A only)"
   target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
   mandatory: false
-  transformation: direct_copy
+  transformation: decompose_party
+  decomposition:
+    pattern_description: >-
+      v2.12 BUG FIX: was a plain direct_copy assuming the raw value was ALWAYS a bare single-line BIC - the same bug
+      class already found and fixed for 52A/53A/54A/55A/56A, but never applied here, despite this entry's OWN notes
+      already saying "Preserve a Party Identifier as CreditorAgentAccount... do not drop it" - an acknowledged gap
+      that was never actually closed. Field 57A's real format is "[/1!a][/34x]" (optional leading Party
+      Identifier/account line) then "4!a2!a2!c[3!c]" (the BIC) - direct_copy on a genuine two-line value would
+      corrupt BICFI. Uses the same strip_account_line_prefix mechanism as 52A/53A/54A/55A/56A.
+      v2.19 BUG FIX (2026-09-04, from live test case TC24, which exposed the same class of bug on 56A): this entry
+      lacked BOTH skip_pattern (so a "//"-prefixed clearing-system line would be duplicated into CdtrAgtAcct, the
+      exact bug TC19 found and fixed for 52A) AND dedicated clearing-system-code extraction entries at all. Both
+      added below, mirroring 52A exactly.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "Id"
+    sub_elements:
+      BICFI: "line:0"
+    sub_element_targets:
+      BICFI: "CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI"
+    conditional_sub_element_targets:
+      Id:
+        skip_pattern: "^/.*$"
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.CdtrAgtAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.CdtrAgtAcct.Id.Othr.Id"
+    fallback_if_unparseable: raise_error
   notes: >-
     57A Account With Institution -> CreditorAgent. BIC maps to FinInstnId/BICFI. If 57a is absent, the receiver BIC is used
     as the CreditorAgent fallback in the MT103->pacs.008 translation context. Preserve a Party Identifier as CreditorAgentAccount
-    or clearing-system identification; do not drop it.
+    or clearing-system identification; do not drop it - now actually implemented above (v2.12), not just described.
+    v2.19: skip_pattern added so a "//" clearing-system line is no longer ALSO duplicated into CdtrAgtAcct - see the
+    dedicated clearing-code entries below, which now own that content exclusively.
   edge_cases:
   - condition: "Field absent"
     handling: "not an error on its own - falls through to 57D, then to the Receiver-BIC fallback below"
+  - condition: "No leading-slash account line present"
+    handling: "not an error - the common case; only BICFI is produced"
+
+- source_field: "57A"
+  source_name: "Account With Institution, option A - clearing-system member id (line starts with '//', code stripped)"
+  target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId.ClrSysMmbId.MmbId"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.19 ADDITION (2026-09-04, from live test case TC24, which exposed this same gap class on 56A): mirrors the 52A
+    clearing-system entries - same TARGET2 "General Functional Specification of the MX/ISO 20022 migration," Annex
+    5.1.3 "ClearingSystemIdentification mapping" table, whose own worked example is decisive: MT
+    "52A://BL12345678\nBANKDEFF" -> "<ClrSysMmbId><ClrSysId><Cd>DEBLZ</Cd></ClrSysId><MmbId>12345678</MmbId></ClrSysMmbId>"
+    - the content after "//" is a 2-character MT clearing-system code immediately followed by the member id, not one
+    opaque string. Applies identically to field 57a, which shares the same "//"-prefixed Party Identifier line
+    format (and per the real SWIFT MT103 field spec, 57a's own CODES table is actually the LARGEST of the three
+    agent fields - it additionally allows ZA (South Africa) that 52a/56a's option-A lists do not list explicitly,
+    though this document's lookup table already includes ZA regardless). DECISION PROCEDURE (inlined, not just
+    cross-referenced, since this entry's llm_assisted call only ever sees ITS OWN notes at runtime): if a 57A line
+    begins with "//", take the 2 characters immediately following it as the MT clearing-system code, and the
+    remainder of that line as MmbId. See the paired ClrSysId/Cd entry below for the code lookup.
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "Line begins with '//' but has fewer than 2 characters after it"
+    handling: "reject - malformed, cannot contain both a clearing-system code and a member id"
+
+- source_field: "57A"
+  source_name: "Account With Institution, option A - clearing-system code (line starts with '//', first 2 chars, looked up)"
+  target_path: "CdtTrfTxInf.CdtrAgt.FinInstnId.ClrSysMmbId.ClrSysId.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  notes: >-
+    v2.19 ADDITION: paired with the MmbId entry above - see its notes for the TARGET2 Annex 5.1.3 citation. Same
+    lookup table as 52A/56A's paired entries (Country / System / MT code / ISO 20022 code), inlined here for the
+    same runtime-notes-isolation reason: Australia AU->AUBSB; Austria AT->ATBLZ; Canada CC->CACPA; China CN->CNAPS;
+    Germany BL->DEBLZ; Greece GR->GRHIC; Hong Kong HK->HKNCC; India IN->INFSC; Ireland IE->IENCC; Italy IT->ITNCC;
+    Japan JP->JPZGN; New Zealand NZ->NZNCC; Poland PL->PLKNR; Portugal PT->PTNCC; Russia RU->RUCBC; South Africa
+    ZA->ZANCC; Spain ES->ESNCC; Switzerland BC Code SW->CHBCC; Switzerland SIC Code SW->CHSIC (ambiguous, see
+    edge_cases); UK SC->GBDSC; US CHIPS CP->USPID; US Fedwire FW->USABA. DECISION PROCEDURE: take the 2-character MT
+    clearing-system code identified by the paired MmbId entry above; if it matches exactly one row in this table,
+    output that row's ISO 20022 code to Cd. If it matches zero rows, or matches the ambiguous "SW" case, produce no
+    value for Cd.
+  edge_cases:
+  - condition: "Field absent, or no line begins with '//'"
+    handling: "not an error - this entry produces no value"
+  - condition: "MT clearing-system code is not in the table, or is 'SW' (ambiguous)"
+    handling: "not an error - do not guess; Cd is left unpopulated rather than picking arbitrarily"
 
 - source_field: "57D"
   source_name: "Account With Institution (option D - name/address)"
@@ -1163,58 +2047,110 @@ field_mappings:
     handling: "not an error - InstdAgt is optional; this entry simply produces no value"
 
 # ============================================================================
-# v2.7 ADDITIONS - 13C, 23E, 77B (see known_limitations for full sourcing;
-# 26T deliberately NOT added - see the superseded known_limitations entry)
+# v2.7 ADDITIONS - 13C, 23E, 77B (see known_limitations for full sourcing).
+# 26T was ALSO deliberately excluded from value-mapping at v2.7 (see the
+# known_limitations entry below) - v2.21 added a skip_with_warning entry for
+# it (see that block, after the 77B entries) so the field's mere PRESENCE no
+# longer hard-fails the whole conversion, without reversing the original
+# no-confident-target decision.
 # ============================================================================
 
 - source_field: "13C"
   source_name: "Time Indication - SNDTIME (Sender's Time Stamp)"
   target_path: "CdtTrfTxInf.SttlmTmIndctn.DbtDtTm"
   mandatory: false
-  transformation: llm_assisted
+  transformation: settlement_datetime_from_time_offset
+  gate_pattern: "/SNDTIME/"
+  extract_pattern: "/SNDTIME/(\\d{4}[+-]\\d{4})"
+  date_from_target_path: "CdtTrfTxInf.IntrBkSttlmDt"
   notes: >-
     v2.7 GAP FIX: 13C was entirely absent from this document despite being a real, current, optional MT103 field -
     confirmed present against pacs.008.001.08.xsd, which defines the identical SettlementDateTimeIndication1/
     SettlementTimeRequest2 complex types under CreditTransferTransaction39 (lines 199-200, 926-931, 953-960) already
-    proven working in the companion MT202_TO_PACS00900108.yaml document's six 13C entries. Ported that exact
-    mechanism: field 13C is repetitive (multiple lines possible, newline-joined by this engine's field parser); scan
-    every line. If a line contains the codeword SNDTIME (format /SNDTIME/HHMM[+/-]HHMM), convert the HHMM+/-HHMM
-    portion to an ISO 8601 time-with-UTC-offset value and output ONLY that converted value. If no SNDTIME line
-    exists, output nothing (empty) - not an error (relies on this engine's existing "blank llm_assisted result =
-    skip silently" behavior). STRUCTURAL GAP (same as the MT202 doc's identical entry, not resolved here either):
-    DbtDtTm is typed ISODateTime (full date+time), but 13C's raw value carries ONLY a time - no sourced rule for
-    which date to combine it with (32A's value date and this conversion's own GENERATED:CreDtTm are both unconfirmed
-    candidates). Treat this entry as unverified pending that decision, distinct from the other five 13C entries
-    below (time-only ISOTime targets), which don't have this problem.
+    proven working in the companion MT202_TO_PACS00900108.yaml document's six 13C entries. field 13C is repetitive
+    (multiple lines possible, newline-joined by this engine's field parser); if a line contains the codeword SNDTIME
+    (format /SNDTIME/HHMM[+/-]HHMM), convert the HHMM+/-HHMM portion to an ISO 8601 time-with-UTC-offset value. If no
+    SNDTIME line exists, output nothing - not an error (this entry's gate_pattern skips it entirely in that case).
+    v2.16 SOURCING (2026-09-03): the real SWIFT "Standards MT November 2021" MT103 Message Reference Guide (fetched and
+    read directly, section 2 "Field 13C: Time Indication") confirms Field 13C is a genuine, current MT103 field (format
+    "/8c/4!n1!x4!n", repetitive, Presence Optional) and lists its CODES table verbatim - but that table names only THREE
+    codes: CLSTIME, RNCTIME, SNDTIME. SNDTIME is now directly, officially sourced for MT103 (worked example given:
+    ":13C:/CLSTIME/0915+0100"). See the TILTIME/FROTIME/REJTIME entries below for the codewords this same check does NOT
+    cover - a real, previously undetected gap in this document's own sourcing, not merely an unconfirmed-but-probably-fine
+    assumption.
+    v2.21 BUG FIX (2026-09-04, from live test cases TC41/TC42): a message carrying ONLY ":13C:/CLSTIME/0915+0100" (no
+    SNDTIME/RNCTIME line at all) was rejected with a hard failure whose explanation named CdtDtTm/RNCTIME specifically -
+    a codeword that isn't even present in the message. Root cause #1: this and the other five 13C entries were
+    llm_assisted and GeminiClient.convertLlmAssisted() ran UNCONDITIONALLY for every entry sharing this source_field,
+    regardless of whether that entry's own codeword appeared in the raw value - "confidence=low" is a hard
+    TransformationException, not a per-field skip, and nothing in ConverterService caught it per-entry, so ANY one of
+    the six calls refusing (even correctly, because its own codeword just isn't there) failed the WHOLE conversion.
+    Fixed with gate_pattern (see FieldMapping.java) - each entry is now skipped entirely, deterministically, when its
+    own codeword substring is absent. Root cause #2, THIS entry and RNCTIME specifically: even for a message where
+    SNDTIME/RNCTIME genuinely IS present (TC42), this entry was STILL unresolved - see the now-superseded "STRUCTURAL
+    GAP" note this replaces: DbtDtTm/CdtDtTm are typed ISODateTime (full date+time), but 13C's raw value carries ONLY
+    a time, and no source had been checked for which date to pair it with, so this entry was left permanently
+    llm_assisted-with-no-good-answer, which the model correctly (but unhelpfully, for TC42's purposes, which expects
+    a populated value) kept refusing. RESOLVED this version: paired with CdtTrfTxInf.IntrBkSttlmDt (32A's own value
+    date, already deterministically converted earlier in this document's field_mappings order) via the new
+    date_from_target_path mechanism and settlement_datetime_from_time_offset transformation (see
+    TransformationEngine.java) - SttlmTmIndctn is literally "Settlement Time Indication," so pairing it with this
+    same transaction's own settlement date (32A/IntrBkSttlmDt) is the most natural, non-arbitrary choice available in
+    the message, not an invented value. This is a genuine, deliberate DECISION (not a directly-cited worked example)
+    - GENERATED:CreDtTm (the conversion's own wall-clock timestamp) was considered and rejected as the pairing date,
+    since a settlement time indication should describe the underlying TRANSACTION's timing, not when the file
+    happened to be converted. Now fully deterministic - no LLM call at all for either SNDTIME or RNCTIME.
   edge_cases:
   - condition: "Field absent, or no SNDTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "SNDTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
+  - condition: "SNDTIME line present but CdtTrfTxInf.IntrBkSttlmDt was not yet populated (field_mappings ordering issue)"
+    handling: "reject - see settlementDateTimeFromTimeOffset's own guard in TransformationEngine.java"
 
 - source_field: "13C"
   source_name: "Time Indication - RNCTIME (Receiver's Time Stamp)"
   target_path: "CdtTrfTxInf.SttlmTmIndctn.CdtDtTm"
   mandatory: false
-  transformation: llm_assisted
+  transformation: settlement_datetime_from_time_offset
+  gate_pattern: "/RNCTIME/"
+  extract_pattern: "/RNCTIME/(\\d{4}[+-]\\d{4})"
+  date_from_target_path: "CdtTrfTxInf.IntrBkSttlmDt"
   notes: >-
-    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword RNCTIME. Same STRUCTURAL GAP
-    as SNDTIME: CdtDtTm is also typed ISODateTime with no sourced date to combine with the time-only raw value.
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword RNCTIME.
+    v2.16 SOURCING: RNCTIME is one of the three codes confirmed for MT103 Field 13C by the official SWIFT MT103 field
+    spec (see the SNDTIME entry above for the citation) - directly sourced, not just ported from the companion MT202 doc.
+    v2.21 BUG FIX (TC41/TC42): same fix as the SNDTIME entry above in every respect (gate_pattern for presence,
+    settlement_datetime_from_time_offset + date_from_target_path for the date-pairing resolution) - see its notes for
+    the full explanation, including why CdtTrfTxInf.IntrBkSttlmDt (not GENERATED:CreDtTm) was chosen as the paired date.
   edge_cases:
   - condition: "Field absent, or no RNCTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "RNCTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
+  - condition: "RNCTIME line present but CdtTrfTxInf.IntrBkSttlmDt was not yet populated (field_mappings ordering issue)"
+    handling: "reject - see settlementDateTimeFromTimeOffset's own guard in TransformationEngine.java"
 
 - source_field: "13C"
   source_name: "Time Indication - CLSTIME (Cover Time / latest time by which cover must be received)"
   target_path: "CdtTrfTxInf.SttlmTmReq.CLSTm"
   mandatory: false
-  transformation: llm_assisted
-  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword CLSTIME."
+  transformation: time_offset_format
+  gate_pattern: "/CLSTIME/"
+  extract_pattern: "/CLSTIME/(\\d{4}[+-]\\d{4})"
+  notes: >-
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword CLSTIME.
+    v2.16 SOURCING: CLSTIME is one of the three codes confirmed for MT103 Field 13C by the official SWIFT MT103 field
+    spec (see the SNDTIME entry above for the citation) - directly sourced, not just ported from the companion MT202 doc.
+    v2.21 BUG FIX (2026-09-04, from live test cases TC41/TC42): switched from llm_assisted to the new deterministic
+    time_offset_format transformation (TransformationEngine.java) - unlike SNDTIME/RNCTIME above, this entry's target
+    (SttlmTmReq/CLSTm) is a bare ISOTime, not ISODateTime, so it has no date-pairing gap at all and never needed an
+    LLM call in the first place; the only actual bug was the shared-source-field refusal-cascade already fixed via
+    gate_pattern (see the SNDTIME entry's note) - reformatting HHMM[+-]HHMM to HH:MM:SS+HH:MM is a fixed, mechanical
+    operation with a single correct answer.
   edge_cases:
   - condition: "Field absent, or no CLSTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "CLSTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
 
@@ -1222,11 +2158,23 @@ field_mappings:
   source_name: "Time Indication - TILTIME (Till Time)"
   target_path: "CdtTrfTxInf.SttlmTmReq.TillTm"
   mandatory: false
-  transformation: llm_assisted
-  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword TILTIME."
+  transformation: time_offset_format
+  gate_pattern: "/TILTIME/"
+  extract_pattern: "/TILTIME/(\\d{4}[+-]\\d{4})"
+  notes: >-
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword TILTIME.
+    v2.16 SOURCING CAVEAT (2026-09-03): unlike CLSTIME/RNCTIME/SNDTIME (see the SNDTIME entry above), the real SWIFT
+    "Standards MT November 2021" MT103 Message Reference Guide's CODES table for Field 13C lists ONLY CLSTIME/RNCTIME/
+    SNDTIME - TILTIME is NOT among them. This entry's implementation is ported from the companion MT202 document (which
+    has its own, separately-sourced Field 13C entries) and from the target-side pacs.008 XSD's SttlmTmReq/TillTm element
+    genuinely existing - but no source checked so far confirms TILTIME is a valid codeword for MT103's Field 13C
+    specifically. Not necessarily wrong (a newer Standards MT release may add it, or it may be valid via bilateral
+    agreement even if not in the base 2021 spec), but this is now a disclosed, real gap rather than an assumed-safe port.
+    v2.21 BUG FIX: switched from llm_assisted to time_offset_format - see the CLSTIME entry's identical v2.21 note
+    above (no date-pairing gap for SttlmTmReq targets; the LLM was never actually needed here, only gate_pattern was).
   edge_cases:
   - condition: "Field absent, or no TILTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "TILTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
 
@@ -1234,11 +2182,17 @@ field_mappings:
   source_name: "Time Indication - FROTIME (From Time)"
   target_path: "CdtTrfTxInf.SttlmTmReq.FrTm"
   mandatory: false
-  transformation: llm_assisted
-  notes: "v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword FROTIME."
+  transformation: time_offset_format
+  gate_pattern: "/FROTIME/"
+  extract_pattern: "/FROTIME/(\\d{4}[+-]\\d{4})"
+  notes: >-
+    v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword FROTIME.
+    v2.16 SOURCING CAVEAT: same as the TILTIME entry above - FROTIME is not in the official SWIFT MT103 Field 13C
+    CODES table either (only CLSTIME/RNCTIME/SNDTIME are), a disclosed, unresolved gap.
+    v2.21 BUG FIX: switched from llm_assisted to time_offset_format - see the CLSTIME entry's identical v2.21 note above.
   edge_cases:
   - condition: "Field absent, or no FROTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "FROTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
 
@@ -1246,14 +2200,20 @@ field_mappings:
   source_name: "Time Indication - REJTIME (Reject Time)"
   target_path: "CdtTrfTxInf.SttlmTmReq.RjctTm"
   mandatory: false
-  transformation: llm_assisted
+  transformation: time_offset_format
+  gate_pattern: "/REJTIME/"
+  extract_pattern: "/REJTIME/(\\d{4}[+-]\\d{4})"
   notes: >-
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword REJTIME. An unrecognized 7th+
     codeword is a documented gap (see known_limitations); none of these six entries will match it, and no catch-all
     entry exists, so it is silently not carried forward rather than rejected outright.
+    v2.16 SOURCING CAVEAT: same as the TILTIME/FROTIME entries above - REJTIME is not in the official SWIFT MT103 Field
+    13C CODES table either. Of this document's six 13C entries, three (CLSTIME/RNCTIME/SNDTIME) are now directly
+    SWIFT-sourced for MT103 and three (TILTIME/FROTIME/REJTIME) remain unconfirmed for MT103 specifically.
+    v2.21 BUG FIX: switched from llm_assisted to time_offset_format - see the CLSTIME entry's identical v2.21 note above.
   edge_cases:
   - condition: "Field absent, or no REJTIME line present"
-    handling: "not an error - this entry produces no value"
+    handling: "not an error - this entry is skipped entirely by gate_pattern"
   - condition: "REJTIME line present but the time portion is not valid HHMM[+/-]HHMM"
     handling: "reject - do not guess"
 
@@ -1262,6 +2222,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.InstrForCdtrAgt.Cd"
   mandatory: false
   transformation: llm_assisted
+  gate_pattern: "^(CHQB|HOLD|PHOB|TELB)$"
   notes: >-
     v2.7 GAP FIX: 23E was previously excluded entirely ("NOT MAPPED... No field_mappings entry" per the prior
     known_limitations entry, now superseded). Reopened after directly reading the Bank of America MT103-to-pacs.008
@@ -1273,10 +2234,19 @@ field_mappings:
     sub-element, Instruction3Code, restricted to exactly {CHQB, HOLD, PHOB, TELB} - the same four values shown in
     the source guide's own 23E code-narrative table. Since these four MT codewords are lexically identical to the
     four valid Cd enum values, writing the codeword directly into Cd (not InstrInf) is the more schema-precise
-    translation. DECISION PROCEDURE: if 23E's value is exactly one of CHQB/HOLD/PHOB/TELB with no trailing
-    "/narrative", write it verbatim to Cd and output nothing for the InstrInf/CtgyPurp entries below. Any other
-    codeword, or one of these four WITH trailing narrative, produces no value here (falls through to the InstrInf
-    entry below instead) - not an error.
+    translation. DECISION PROCEDURE: 23E can appear as MULTIPLE separate MT lines (newline-joined into one raw
+    value) - evaluate EACH LINE independently, not the raw value as a single unit. If ANY line is exactly one of
+    CHQB/HOLD/PHOB/TELB with no trailing "/narrative", write that line's code verbatim to Cd (other lines, if any,
+    are each independently handled by their own matching entry among this document's other 23E entries - this is
+    not mutually exclusive with them producing their own values from the OTHER lines of the same raw value). A line
+    that is one of these four WITH trailing narrative, or any other codeword, contributes no value here (falls
+    through to the InstrInf entry below instead for that line) - not an error.
+    v2.21 BUG FIX (2026-09-04, from live test case TC44): 23E can repeat as separate MT lines (e.g. "SDVA\nHOLD",
+    newline-joined into one raw value by this engine's field parser) - "23E's value is exactly one of CHQB/HOLD/
+    PHOB/TELB" now means "one of its LINES is exactly one of these four," not "the whole raw value is." Added
+    gate_pattern so this is checked deterministically per-line in Java rather than left to the LLM to judge
+    strictly-equals against a multi-line string - see the SvcLvl/Cd entry's v2.21 note below for the full root-cause
+    explanation shared across all four 23E entries.
   edge_cases:
   - condition: "Field absent"
     handling: "not an error - InstrForCdtrAgt is optional"
@@ -1295,40 +2265,104 @@ field_mappings:
     Instruction3Code enum ({CHQB, HOLD, PHOB, TELB} only) - writing them into Cd would fail XSD enumeration
     validation. InstrInf is Max140Text (free text, no enum restriction), so this entry is the correct target for any
     codeword outside that four-value set, and for any of the four WITH trailing narrative (e.g. "TELI/3226553478",
-    matching the source guide's own second worked example). DECISION PROCEDURE: if 23E does NOT match the Cd
-    entry's condition above (i.e. it is not exactly one of CHQB/HOLD/PHOB/TELB with no narrative) AND is not one of
-    SDVA/INTC/CORT (see the CtgyPurp entry below), copy the full raw 23E value verbatim into InstrInf.
+    matching the source guide's own second worked example). DECISION PROCEDURE (v2.21 REWRITE, 2026-09-04, from live
+    test case TC44 - see below): 23E can appear as MULTIPLE separate MT lines (newline-joined into one raw value) -
+    evaluate EACH LINE independently, not the raw value as a single unit. For each line: if that line is NOT exactly
+    one of CHQB/HOLD/PHOB/TELB/SDVA/INTC/CORT (i.e. it doesn't match the Cd, SvcLvl, or CtgyPurp entries' own
+    conditions), OR is one of the four Cd-eligible codes WITH trailing narrative, include that line's full text in
+    InstrInf; join multiple such qualifying lines with a newline if more than one exists. If EVERY line of the raw
+    value is fully consumed by the Cd/CtgyPurp/SvcLvl entries (e.g. "SDVA\nHOLD" - both lines exactly match another
+    entry's condition), this entry produces NO value - not a refusal, and not the raw multi-line string copied
+    verbatim (the old, pre-v2.21 instruction here).
+    v2.21 BUG FIX EXPLANATION (from live test case TC44): a message with 23E repeated as "SDVA\nHOLD" was rejected
+    outright - the OLD decision procedure above told the LLM to copy the full raw value verbatim whenever 23E
+    "is not exactly" one of the enumerated codes, but a two-line value is trivially "not exactly" any single code,
+    so the old wording forced a verbatim copy of "SDVA\nHOLD" into InstrInf even though SDVA/HOLD are BOTH handled
+    elsewhere - the model correctly recognized this contradiction and refused rather than guess, but the underlying
+    instruction was genuinely self-contradictory, not just under-specified. This entry has no gate_pattern
+    (unlike the other three 23E entries) because its own condition is "none of the others matched," which can't be
+    expressed as a simple presence-regex without duplicating those three entries' logic - it still runs
+    unconditionally whenever 23E is present, relying on the rewritten decision procedure above instead.
   edge_cases:
   - condition: "Field absent"
     handling: "not an error - InstrForCdtrAgt is optional"
   - condition: "Value exceeds 140 characters"
     handling: "reject - do not truncate"
+  - condition: "Every line of a multi-line 23E value is fully consumed by the Cd/CtgyPurp/SvcLvl entries above"
+    handling: "not an error - this entry produces no value, not the raw multi-line string"
 
 - source_field: "23E"
-  source_name: "Instruction Code - SDVA/INTC/CORT (recognized ISO 20022 external category-purpose codes)"
+  source_name: "Instruction Code - INTC/CORT (category-purpose codes)"
   target_path: "CdtTrfTxInf.PmtTpInf.CtgyPurp.Cd"
   mandatory: false
   transformation: llm_assisted
+  gate_pattern: "^(INTC|CORT)$"
   notes: >-
-    v2.7 GAP FIX: the third of the source guide's three possible 23E targets. SDVA (Same Day Value), INTC
-    (Intra-Company Payment), and CORT (Trade Settlement Payment) are established ISO 20022 external
-    category-purpose codes independently of this specific translation guide - CtgyPurp/Cd (ExternalCategoryPurpose1Code)
-    is an open 1-4 character code in this XSD, so no closed enumeration blocks this. DECISION PROCEDURE: if 23E's
-    value is exactly SDVA, INTC, or CORT, write it verbatim to CtgyPurp/Cd (and the InstrInf entry above produces no
-    value for this same message). RESIDUAL GAP (see known_limitations): the source guide also shows a
-    PmtTpInf/SvcLvl/Cd target as a fourth theoretical destination for 23E, but never gives a worked example of which
-    code triggers it - not implemented here; a 23E code that isn't CHQB/HOLD/PHOB/TELB/SDVA/INTC/CORT falls through
-    to the InstrInf entry above by default, which is a safe (no data loss) but possibly imprecise destination for
-    such a code.
+    v2.9 SOURCED CORRECTION: this entry previously also routed SDVA here (see the superseded v2.7 note this replaces,
+    kept in the known_limitations changelog for history) on the reasoning that SDVA/INTC/CORT are "established ISO
+    20022 external category-purpose codes" as a group - defensible in the abstract, but wrong per an actual
+    authoritative field-level table. Directly verified against Annex 5.1.1 of the TARGET2 "General Functional
+    Specification of the MX/ISO 20022 migration" (a real MT103-to-pacs.008 field mapping table, not TARGET2-network
+    business logic - the field-to-element correspondence itself is not TARGET2-specific): "23E Instruction Code O ->
+    PaymentTypeInformation/ServiceLevel/Code (SDVA) [and separately] PaymentTypeInformation/CategoryPurpose/Code
+    (INTC, CORT)" - two DIFFERENT targets, not one. SDVA moved to its own new entry below (SvcLvl/Cd). INTC and CORT
+    (Intra-Company Payment, Trade Settlement Payment) stay here. DECISION PROCEDURE: 23E can appear as MULTIPLE
+    separate MT lines (newline-joined into one raw value) - evaluate EACH LINE independently, not the raw value as
+    a single unit. If ANY line is exactly INTC or CORT, write that line's code verbatim to CtgyPurp/Cd (other lines,
+    if any, are each independently handled by their own matching entry among this document's other 23E entries).
+    v2.21 BUG FIX (2026-09-04, from live test case TC43): added gate_pattern - see the SvcLvl/Cd entry's identical
+    v2.21 note below for the full explanation (23E can repeat as separate MT lines with DIFFERENT codewords, e.g.
+    "SDVA\nINTC", and the four 23E entries in this document were being asked to judge the whole multi-line value as
+    one unit rather than per-line, causing spurious low-confidence refusals).
   edge_cases:
-  - condition: "Field absent, or code is not SDVA/INTC/CORT"
-    handling: "not an error here - see the other two 23E entries above"
+  - condition: "Field absent, or code is not INTC/CORT"
+    handling: "not an error here - see the SvcLvl and InstrInf entries for SDVA and everything else"
+
+- source_field: "23E"
+  source_name: "Instruction Code - SDVA (Same Day Value service level)"
+  target_path: "CdtTrfTxInf.PmtTpInf.SvcLvl#0.Cd"
+  mandatory: false
+  transformation: llm_assisted
+  gate_pattern: "^SDVA$"
+  notes: >-
+    v2.9 GAP FIX: split out of the CtgyPurp/Cd entry above - see its v2.9 note for the full correction history and
+    citation. Confirmed directly against pacs.008.001.08.xsd: PaymentTypeInformation28's SvcLvl is
+    maxOccurs="unbounded" (type ServiceLevel8Choice, Cd|Prtry choice) - repeatable, like ChrgsInf/RgltryRptg
+    elsewhere in this document, hence the "#0" indexed-target convention already established for those. DECISION
+    PROCEDURE: 23E can appear as MULTIPLE separate MT lines (newline-joined into one raw value) - evaluate EACH LINE
+    independently, not the raw value as a single unit. If ANY line is exactly SDVA, write SDVA verbatim to
+    SvcLvl#0/Cd (other lines, if any, are each independently handled by their own matching entry among this
+    document's other 23E entries - e.g. an INTC line on a different row of the same raw value also independently
+    populates CtgyPurp/Cd). RESIDUAL GAP: the TARGET2 source's own worked-example evidence for this
+    specific path is thin (its table states the rule but this document has not independently confirmed it against a
+    second real worked SDVA example) - treat as sourced but not doubly-verified, consistent with this document's
+    existing "Yes"/"No" SWIFT-verified distinction elsewhere.
+    v2.21 BUG FIX (2026-09-04, from live test cases TC43/TC44): a message with 23E repeated across two lines (e.g.
+    "SDVA\nINTC" or "SDVA\nHOLD" - each occurrence newline-joined into one raw value by this engine's field parser,
+    same mechanism as 71F/50F/59F elsewhere in this doc) was rejected outright. Root cause: this and the other three
+    23E entries are llm_assisted, called UNCONDITIONALLY with the FULL raw value regardless of whether their own
+    codeword is present (same class of bug as the 13C fix above - see that entry's v2.21 note for the full mechanism
+    explanation) - each entry's own DECISION PROCEDURE says "if 23E's value is exactly SDVA," which a strict reading
+    treats as false for a two-line value like "SDVA\nINTC" even though SDVA genuinely IS one of its lines, causing a
+    spurious low-confidence refusal that (being an uncaught TransformationException) failed the whole conversion.
+    Fixed with gate_pattern: "^SDVA$" (Java-checked with MULTILINE, so it matches a LINE that is exactly SDVA
+    within a multi-line value) - this entry, the CtgyPurp/Cd entry, and the Cd entry above now each independently and
+    deterministically fire only for their own codeword's line, so "SDVA\nINTC" correctly populates BOTH SvcLvl#0/Cd
+    and CtgyPurp/Cd from the same source field with no LLM ambiguity at all. NOT ADDRESSED here: TC44's second
+    finding, that SWIFT rule combinations forbidding certain 23E code pairings (the test's own analysis named "D67",
+    e.g. SDVA+HOLD) are not validated - not implemented in this version because this document has not independently
+    verified that specific rule citation against a fetched SWIFT source; flagged in known_limitations rather than
+    guessed at.
+  edge_cases:
+  - condition: "Field absent, or code is not SDVA"
+    handling: "not an error here - see the CtgyPurp and InstrInf entries for INTC/CORT and everything else"
 
 - source_field: "77B"
   source_name: "Regulatory Reporting - reporting-side indicator (ORDERRES=debtor / BENEFRES=creditor)"
   target_path: "CdtTrfTxInf.RgltryRptg#0.DbtCdtRptgInd"
   mandatory: false
   transformation: llm_assisted
+  gate_pattern: "/ORDERRES/|/BENEFRES/"
   notes: >-
     v2.7 GAP FIX: 77B was previously excluded ("Excluded from field_mappings; candidate for a follow-up once
     forward-direction samples exist" per the prior known_limitations entry, now superseded). Reopened after directly
@@ -1346,6 +2380,10 @@ field_mappings:
     the raw text regardless). "#0" marks the first (and, in this version, only) RgltryRptg occurrence - RgltryRptg
     is maxOccurs=10 in the XSD but 77B's realistic multi-line repetition is not handled by this version; see
     known_limitations.
+    v2.21 PREVENTIVE FIX (2026-09-04): added gate_pattern as a consistency measure, applying the same fix built
+    for TC41-44 (13C/23E) to this entry and the Ctry entry below - not itself triggered by a failing batch-5 test
+    case (TC47 passed), but the identical architectural risk exists here too (llm_assisted, unconditional LLM call
+    regardless of whether /ORDERRES//BENEFRES/ is actually present) and costs nothing to close pre-emptively.
   edge_cases:
   - condition: "Field absent, or no line starts with /ORDERRES/ or /BENEFRES/"
     handling: "not an error - DbtCdtRptgInd is optional; see the Inf entry below, which still captures the raw text"
@@ -1355,6 +2393,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.RgltryRptg#0.Dtls.Ctry"
   mandatory: false
   transformation: llm_assisted
+  gate_pattern: "/ORDERRES/|/BENEFRES/"
   notes: >-
     v2.7 GAP FIX: paired with the DbtCdtRptgInd entry above - identical codeword detection. Matches the source
     guide's own worked example (":77B:/BENEFRES/CA" - "CA" is a 2-letter ISO country code), which fits Dtls/Ctry's
@@ -1383,7 +2422,197 @@ field_mappings:
   - condition: "Value exceeds 35 characters (Dtls/Inf is Max35Text)"
     handling: "reject - do not truncate; a future version may need to split a long line across multiple Inf occurrences"
 
+- source_field: "26T"
+  source_name: "Transaction Type Code (deliberately not value-mapped - see notes)"
+  target_path: "CdtTrfTxInf.Purp.Cd"
+  mandatory: false
+  transformation: skip_with_warning
+  notes: >-
+    v2.21 GAP FIX (2026-09-04, from live test case TC45): 26T previously had NO field_mappings entry at all - a
+    deliberate v2.7 decision (see the known_limitations entry below), not an oversight: the Bank of America
+    MT103-to-pacs.008 formatting guide already cited elsewhere in this document states verbatim that 26T 'is not
+    processed by Bank of America', which this document treated as evidence AGAINST mapping it, even though
+    pacs.008.001.08.xsd does have a structural target (Purp, type Purpose2Choice, Cd sub-element = ExternalPurpose1Code,
+    confirmed directly against the XSD, max 4 chars - 26T's own SWIFT format is 3!c, well within that). TC45 surfaced
+    the REAL consequence of "no field_mappings entry": ConverterService.checkUnmappedFields() treats any source field
+    with zero matching entries as a hard error under the default unmapped_fields_policy, so a real MT103 carrying a
+    genuine, current, legitimately-optional field (26T) failed the ENTIRE conversion outright - not merely "26T's
+    value goes nowhere," which was the intended, accepted gap. DECISION: this version still does NOT populate Purp/Cd
+    from 26T (the "not processed by BofA" caution stands - no second, forward-direction worked example has been found
+    to override it) but now uses skip_with_warning (the same mechanism already used for other deliberately-unmapped-value
+    fields elsewhere in this document) so the field is recognized and the conversion proceeds, with a visible warning
+    telling the caller 26T was present and dropped rather than either failing outright or silently vanishing. Revisit
+    if a forward-direction MT103->pacs.008 worked example for 26T is ever found - that would be the evidence needed to
+    turn this into a real value-producing entry instead.
+  edge_cases:
+  - condition: "Field absent"
+    handling: "not an error - this entry produces no value and no warning either (skip_with_warning only fires when the field IS present)"
+  - condition: "Field present"
+    handling: "not a hard failure - surfaced as a conversion warning, value intentionally not carried into Purp/Cd (see notes)"
+
 known_limitations:
+- "v2.21 CHANGELOG NOTE (2026-09-04, live test batch 5 of 5, TC41-TC50 - final batch of a 50-test-case QA campaign):
+  (1) ARCHITECTURE FIX, gate_pattern (FieldMapping.java/ConverterService.java): fields sharing one source_field
+  across several llm_assisted entries (13C's six codewords, 23E's four) previously called the LLM unconditionally
+  for EVERY entry regardless of whether that entry's own codeword was even present in the raw value - a
+  low-confidence refusal on ANY one of them threw an uncaught TransformationException that failed the WHOLE
+  conversion, even when the refusal was really just 'my codeword isn't here' (TC41-44). Added a deterministic,
+  zero-LLM-risk gate per entry - see the 13C SNDTIME entry's and 23E SvcLvl/Cd entry's own v2.21 notes for full
+  detail; also applied preventively to 77B's two llm_assisted entries (not test-failure-driven, same architectural
+  risk). (2) ENGINE FIX, match_index (DecompositionService.java): field 72's three /INS/-occurrence entries
+  (PrvsInstgAgt1/2/3) all matched the FIRST /INS/ occurrence regardless of which entry asked, silently duplicating
+  a single BIC into all three elements (TC46) - this document's own prior note had flagged this exact gap as
+  'UNVERIFIED', now confirmed and fixed with an explicit 0/1/2 match_index per entry. (3) GAP FIX, field 26T: a
+  message containing 26T (Transaction Type Code) was previously hard-rejected outright as an unmapped field (TC45)
+  - not merely 'no value produced', which was the actual, deliberate v2.7 decision (26T's value is still NOT carried
+  into Purp/Cd; the 'not processed by Bank of America' sourcing caution stands). Added a skip_with_warning entry so
+  the field's presence no longer blocks the whole conversion. (4) NEW VALIDATION: VR015 (SWIFT rule T26 - field 20
+  must not start/end with '/' or contain '//', TC48) and VR016 (32A currency must not be a precious-metal ISO 4217
+  code XAU/XAG/XPD/XPT, TC49 - sourcing caveat: this document could not independently verify the test's own 'C08'
+  rule-number citation against any of its fetched primary sources, so VR016's own logic states the real-world
+  convention being enforced rather than claiming that specific citation). NOT IMPLEMENTED: TC44's second finding
+  (a forbidding combination of specific 23E codes, e.g. SDVA+HOLD, the test's own analysis named 'D67') - not added
+  for the same reason as VR016's caveat, an unverified rule-ID citation; flagged rather than guessed at. TC47 (77B)
+  and TC50 (kitchen-sink integration, previously blocked entirely by the 26T hard-failure) were confirmed/unblocked
+  by the above but needed no dedicated fix of their own."
+- "v2.14 CHANGELOG NOTE - STRUCTURED ADDRESS ENRICHMENT (libpostal), FOR THE 14 NOV 2026 REQUIREMENT: implements the
+  'hybrid address' model - see the ADDRESS POLICY note in scope_notes for full detail. NEW: address-parser-service/
+  (Python/FastAPI sidecar wrapping libpostal + pycountry), AddressParserClient.java (fails soft - sidecar
+  unreachable/low-confidence just skips enrichment, never fails a conversion), StructuredAddressRule.java +
+  DecompositionRule.structuredAddress (opt-in per decompose_party entry), ConverterService.enrichWithStructuredAddress
+  (called after the normal AdrLine writes, purely additive). Wired into 50K and bare-59 (the free-text name/address
+  entries) - NOT into 50F/59F, which already extract Ctry unambiguously from their own numbered-line format and don't
+  need this. Config: mtmx.address-parser-enabled (default false) + mtmx.address-parser-url. RESEARCHED BEFORE BUILDING
+  (user asked 'is libpostal robust enough'): it is real, proven technology (statistical NLP model trained on
+  OpenStreetMap/OpenAddresses data, 99.45% correct full parses on held-out test data, used historically by Uber/Mapzen
+  at scale) - NOT a heuristic, but also NOT infallible, and its Java binding specifically is immature/unpublished to
+  Maven Central, which is why this is a separate Python service rather than a JVM dependency. CONFIDENCE GATE: the
+  sidecar reports confident=true ONLY when its extracted 'country' component matches a real ISO 3166 country (via
+  pycountry) - city/street are NOT independently verified (no closed list exists to check them against), so this is a
+  country-level confidence signal, not a blanket trust-everything flag. NOT TESTED END-TO-END: libpostal could not be
+  installed in the development environment used to build this (requires a C compiler toolchain not present, plus a
+  ~2GB data download) - the code was written carefully against libpostal's documented API and install process, but a
+  real deployment must build and run address-parser-service/ (see its Dockerfile) and verify it against real MT103
+  address samples before enabling mtmx.address-parser-enabled=true in production."
+- "v2.13 CHANGELOG NOTE - ENGINE FIX, IBAN|Othr ROLLOUT COMPLETED: the v2.12 gap (50K/59/52A/53A/54A/55A/57A's account
+  extraction couldn't get IBAN|Othr precision without either re-parsing the same raw value twice - already rejected
+  once per 50K's own v2.1 DEDUP FIX note - or a real code change) is now closed with the actual code change instead
+  of a workaround. Added DecompositionRule.conditionalSubElementTargets (new model class
+  ConditionalSubElementTarget: pattern/if_match_target/else_target) and wired it into
+  ConverterService's decompose_party handling: for a sub-element key present in conditional_sub_element_targets, the
+  SAME single extracted value (not a second parse) is routed to if_match_target or else_target by testing it against
+  pattern with a FULL match - checked BEFORE falling back to the existing sub_element_targets/default-path logic, so
+  every entry that doesn't use this new field is completely unaffected (purely additive, zero behavior change for
+  the other ~65 entries in this document). Applied conditional_sub_element_targets (IBAN pattern
+  [A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}, matching pacs.008.001.08.xsd's AccountIdentification4Choice/IBAN2007Identifier
+  exactly) to all seven remaining account-extraction entries: 50K, 59, 52A, 53A, 54A, 55A, 57A. All 28 MT103 fields
+  that produce an ISO 20022 account identifier now correctly choose IBAN vs Othr/Id by content shape, matching this
+  document's v2.11/v2.12 work for 50A/50F/59A/59F. 52A's separate '//' clearing-system handling is UNCHANGED by this
+  fix (different problem - reshaping a value, not routing it - see that entry's own notes) and its account_line_pattern
+  still only strips the FIRST slash, so a genuine '//' line's captured content still starts with '/' and correctly
+  never matches the IBAN pattern, falling through to Othr/Id exactly as before - verified no regression there."
+- "v2.12 CHANGELOG NOTE - IBAN|Othr ROLLOUT (partial, deliberately) + 57A BUG FIX: asked to extend the v2.11 IBAN|Othr
+  fix to every remaining account-extraction entry. Applied cleanly to 50F and 59F (standalone llm_assisted entries,
+  same architecture as 50A/59A - split into IBAN/Othr branches the same way). Did NOT apply it to 50K, 59, 52A,
+  53A/54A/55A, or 57A's account extraction, and this is a deliberate decision, not an oversight: those entries embed
+  their account extraction inside a decompose_party block (via strip_account_line_prefix/account_sub_element)
+  alongside Nm/BICFI extraction in the SAME entry. Checked DecompositionService.java and ConverterService.java
+  directly: the account_sub_element write happens unconditionally on regex match with no mechanism to suppress it
+  or route it conditionally by content shape - the only way to add an IBAN branch would be a SEPARATE entry that
+  independently RE-PARSES the same raw value to extract the same account line a second time. That is exactly the
+  pattern 50K's own v2.1 DEDUP FIX note already rejected, in its own words: 'the two mechanisms had no guarantee of
+  staying in agreement on edge cases... any future divergence would go undetected' - re-introducing it here to gain
+  IBAN precision would trade one class of bug for another. PROPER FIX (not implemented in this pass, requires a Java
+  change, not just a yaml edit): extend DecompositionRule/ConverterService so a sub_element_targets entry can name
+  TWO conditional destinations for one extracted sub-element (e.g. an IBAN-pattern-matched target and a fallback),
+  so decompose_party's single extraction pass can route to IBAN vs Othr/Id without re-parsing. Flagged as a genuine
+  engineering follow-up. SEPARATELY, found and fixed a real, independent bug while reviewing these fields: 57A was
+  still a bare direct_copy (never got the same multi-line fix already applied to 52A/53A/54A/55A/56A), despite its
+  own notes already saying 'Preserve a Party Identifier as CreditorAgentAccount... do not drop it' - an acknowledged
+  gap that was never actually closed. Converted to decompose_party, mirroring the others exactly."
+- "v2.11 CHANGELOG NOTE - IBAN|Othr CHOICE FIX: the user submitted a second suggestion (again uncited) that 50A/59A's
+  account mapping should be conditional between DbtrAcct/CdtrAcct's IBAN and Othr/Id branches, not always Othr/Id.
+  Verified directly against pacs.008.001.08.xsd BEFORE accepting: AccountIdentification4Choice is a genuine xs:choice
+  { IBAN (IBAN2007Identifier, pattern [A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}) | Othr } - a real structural choice, not a
+  detail the suggestion invented. Accepted and implemented for 50A and 59A (the two fields asked about): each split
+  into two mutually exclusive entries (IBAN branch, Othr/Id branch), decided by matching the extracted account
+  content against the IBAN pattern - structural shape only, no mod-97 checksum validation (out of scope, consistent
+  with this document's no-invented-complexity stance). RESIDUAL GAP, not implemented in this pass: the identical
+  IBAN|Othr choice exists everywhere else this document extracts an account (50F, 50K, 59, 59F, 52A's DbtrAgtAcct,
+  53A/54A/55A's SttlmAcct, 57A's CdtrAgtAcct) - all of these currently ALSO force Othr/Id unconditionally, the same
+  pre-fix pattern 50A/59A just had. Not fixed here since only 50A/59A were asked about; flagged so this doesn't read
+  as a deliberate inconsistency - it's the same fix, just not yet applied everywhere it structurally could be."
+- "v2.10 CHANGELOG NOTE - EXTERNAL SUGGESTION LIST REVIEWED: the user supplied a table of ten suggested corrections
+  for MT-to-MX targets (20, 13C, 50A, 50K, 52D, 57A, 57D, 59, 59A, 59F), sourced/authored outside this project with
+  no citations given. Checked each against this document's ACTUAL decomposition logic (not the simplified summary
+  table previously handed to the user, which collapses multi-sub-element decompositions to one container path for
+  readability and was likely what the suggestions were reviewing against). Verdict: 8 of 10 were already correctly
+  implemented and the suggestion was based on the simplified summary, not a real gap - 20 (dual MsgId+InstrId is
+  simultaneous, sourced, and intentional, not contextual either/or), 13C (six entries are already mutually exclusive
+  by codeword), 52D and 57D (already decompose to FinInstnId/Nm + PstlAdr/AdrLine + Othr/Id, confirmed by reading
+  their decomposition.sub_element_targets directly - the suggestion's 'incomplete' claim only looked as far as the
+  container-level target_path), 50K and 59 (already decompose to BOTH the account, via account_sub_element ->
+  DbtrAcct/CdtrAcct, AND the name/address, via Nm/AdrLine -> Dbtr/Cdtr - same read-the-actual-logic correction), 57A
+  (agreed correct, no change). Two suggestions were REJECTED outright, with a direct citation contradicting them: 50A
+  and 59A's claim that mapping the option-A BIC to Dbtr/Cdtr's Id/OrgId/AnyBIC is wrong - this is independently
+  confirmed correct by TARGET2 Annex 5.1.2 (already cited in this document's v2.9 review): 'Identifier Code
+  4!a2!a2!c[3!c] M -> Debtor/Identification/OrganisationIdentification/AnyBIC' (and the mirrored Creditor path for
+  59A) - a real authoritative source outranks an uncited suggestion. One suggestion was CORRECT and is now fixed:
+  59F was genuinely account-only (llm_assisted, no decomposition at all), mirroring 50F's own pre-v2.9 gap exactly -
+  added Name/AddressLine/Country/TownName entries for 59F's first three numbered lines, BY ANALOGY with 50F's
+  TARGET2-cited structure (Beneficiary Customer option F mirrors Ordering Customer option F's numbered-line
+  convention) since no directly-cited 59F-specific table exists - flagged as lower confidence than 50F's own entries
+  for exactly that reason."
+- "v2.9 ADDENDUM (same turn as the review below): the 52A '//' entry's first version, added during this same review,
+  routed the entire post-'//' content verbatim to MmbId with ClrSysId/Cd left unimplemented, reasoning that TARGET2
+  Annex 5.1.3's own 'ClearingSystemIdentification mapping' table did not extract as text. Re-checked before finishing
+  the review: that table is embedded as an IMAGE in the source PDF (not a text-extraction failure, a genuinely
+  non-text table), extracted via PyMuPDF and read directly rather than via OCR (no tesseract binary available in this
+  environment). It contains a full Country/System/MT-code/ISO-code table plus a worked example
+  (':52A://BL12345678' -> ClrSysId/Cd='DEBLZ', MmbId='12345678') proving the post-'//' content is NOT one opaque
+  string - it's a 2-character MT clearing-system code immediately followed by the member id. Corrected both the
+  MmbId entry (now strips the 2-character code first) and added the ClrSysId/Cd entry (code-list lookup, transcribed
+  from the table) - see both entries' own notes for the full table and the one deliberately-unresolved case
+  (Switzerland's 'SW' code is shared by two different systems, genuinely ambiguous from the MT side alone)."
+- "v2.9 CHANGELOG NOTE - EXTERNAL SOURCE REVIEW: this document was reviewed against two additional sources at the
+  user's request: (1) TARGET2 'General Functional Specification of the MX/ISO 20022 migration' (Eurosystem, 2013/2014)
+  - ANNEX 5.1 ONLY (MT103-to-pacs.008 core mapping tables), explicitly scoped to that section since the rest of that
+  document is TARGET2-network-specific and this document's own scope_notes already deliberately excludes TARGET2 as
+  a source of truth (see the TARGET PROFILE DECISION note); (2) JPMorgan 'Migration to ISO 20022' guide (Jan 2023,
+  full document), which includes a concrete worked MT103-to-pacs.008 example with real XML output - genuinely useful
+  since it is CBPR+-flavored (BizSvc=swift.cbprplus.02) and matches this document's actual target profile, unlike the
+  TARGET2 source. Four sourced corrections/additions were made as a result: (a) 23E's SDVA code was mis-routed to
+  CtgyPurp/Cd - TARGET2 Annex 5.1.1 shows SDVA belongs on SvcLvl/Cd, separate from INTC/CORT on CtgyPurp/Cd - split
+  into two entries. (b) 53A/54A/55A used a bare direct_copy that would corrupt BICFI if a leading Party
+  Identifier/account line was present - the same bug class already fixed for 56A/57A in v1.1 but never applied here;
+  converted to decompose_party, and additionally now route the extracted account line to GrpHdr/SttlmInf/SttlmAcct
+  per TARGET2 Annex 5.1.3 (previously dropped entirely). (c) Field 72 previously mapped ONLY the /INS/ codeword;
+  JPMorgan's worked example shows /ACC/ content -> InstrForCdtrAgt/InstrInf and remaining codeword content ->
+  InstrForNxtAgt/InstrInf - both added. (d) 52A had the same direct_copy bug as (b), now fixed the same way; also
+  added a new entry for a '//'-prefixed clearing-system line -> ClrSysMmbId/MmbId (TARGET2 Annex 5.1.3), and 50F
+  gained real Name/AddressLine/Country/TownName decomposition for its first three numbered lines (TARGET2 Annex 5.1.2,
+  corroborated structurally by JPMorgan's worked 50F example) - numbered lines 4-8 (birth date, private-id scheme
+  codes) were deliberately NOT implemented since that part of the source table did not extract cleanly from the PDF
+  and no corroborating worked example exists; flagged as a residual gap rather than guessed at. One item was reviewed
+  and deliberately NOT changed: 71F/71G's charge-Agent fallback (Sender/Receiver BIC) is now known to diverge from
+  both sources (TARGET2 says 'deduce from chain' with an 'As per payment chain' text fallback; JPMorgan's own worked
+  example wrote 'NOTPROVIDED' even though Sender/Receiver BICs were determinable) - left as-is pending a deliberate
+  decision rather than silently overridden, since reasonable positions differ and the existing citation (SWIFT's own
+  field 71F definition) is not wrong, just possibly not how real production systems behave."
+- "v2.8 CHANGELOG NOTE: resolved the M/O-status placeholder (see scope_notes' M/O STATUS RESOLUTION for the full
+  reasoning). Set mandatory: true on 20 (both entries already partially true/false, now consistent), 23B, all three 32A
+  entries, and 71A - these are unconditionally mandatory in every real MT103 per two independent public field-spec sources,
+  and each entry's own edge_cases already said 'reject' on absence while its mandatory: flag contradicted that. Did NOT set
+  mandatory: true on the 50A/50F/50K or 59/59A/59F entries individually - would incorrectly reject a valid message using
+  only one option letter, since mandatory: is a per-entry flag with no 'at least one of' semantics. Instead, fixed the
+  ENGINE WIRING of VR005 (source_alternative_group_required), which already existed and already covered exactly this
+  6-field/2-group requirement: it was only ever evaluated after a full conversion attempt, so a message failing it burned
+  up to maxConverterRetries+2 pointless converter re-runs (retrying a source message that cannot change) before finally
+  throwing. Added ValidatorService.checkMandatorySourceFields() plus a new MandatorySourceFieldMissingException, wired into
+  ConversionOrchestrator.convert() immediately after parsing - a message missing 20/23B/32A/71A or every option of
+  50a/59a now fails fast, before the first conversion attempt, with a dedicated exception (mapped to a 422 by
+  GlobalExceptionHandler, same structured response shape as every other engine exception). The original post-conversion
+  VR005 check stays in place too, as a second layer."
 - "v2.7 CHANGELOG NOTE: added 13C (six entries, mirroring the already-proven MT202_TO_PACS00900108.yaml pattern -
   confirmed pacs.008.001.08.xsd has the identical SettlementDateTimeIndication1/SettlementTimeRequest2 structure),
   23E (three entries: Cd for the Instruction3Code-enumerated CHQB/HOLD/PHOB/TELB, CtgyPurp/Cd for SDVA/INTC/CORT,
@@ -1555,16 +2784,23 @@ known_limitations:
   six entries' pattern_description and edge_cases to explicitly state that a non-match means 'no account present' and must
   not raise. This is a correction to documentation clarity for an existing rule, not a new source citation or a change in
   what's actually mapped."
-- "M/O status: no MT103 FIN spec attached, so no field's mandatory flag can be certified - all set to false with a note, including
-  20/32A/71A which are almost certainly mandatory in reality."
+- "SUPERSEDED (v2.8 - see the M/O STATUS RESOLUTION note in scope_notes, and the v2.8 CHANGELOG NOTE below) - M/O status: no
+  MT103 FIN spec attached, so no field's mandatory flag can be certified - all set to false with a note, including 20/32A/71A
+  which are almost certainly mandatory in reality. [Kept for history only - 20/23B/32A/71A now have mandatory: true; 50a/59a
+  are enforced as alternative groups via VR005 instead, not via individual per-entry flags - see scope_notes for why.]"
 - "SUPERSEDED (v2.7 - see the v2.7 CHANGELOG NOTE above) - 23E Instruction Code: unresolved. NOT MAPPED in the
   MT103-to-pacs.004 and MT104-to-pacs.003 tables. The MT101-to-pacs.008 table (different message type) does NOT flag
   it NOT MAPPED and places it near Category Purpose/Instruction For Creditor Agent, but that's not a valid MT103
   citation. No field_mappings entry. [Kept for history only - three field_mappings entries now exist for 23E.]"
-- "26T Transaction Type Code: STILL excluded as of v2.7, but the reasoning was upgraded from 'no evidence' to a
+- "SUPERSEDED IN PART (v2.21 - see the skip_with_warning field_mappings entry now placed after the 77B entries) -
+  26T Transaction Type Code: STILL excluded as of v2.7, but the reasoning was upgraded from 'no evidence' to a
   confirmed direct citation - see the v2.7 CHANGELOG NOTE above. Original v1.x reasoning (kept for history): no
   evidence for MT103-to-pacs.008 in any attached document. NOT MAPPED in MT104-to-pacs.003 (different pair); absent
-  from the MT101-to-pacs.008 table entirely. No field_mappings entry."
+  from the MT101-to-pacs.008 table entirely. No field_mappings entry. [v2.21: 'No field_mappings entry' was itself
+  the live bug found by TC45 - a message containing 26T was hard-rejected outright as an unmapped field, not merely
+  left with no value. A skip_with_warning entry now exists so the field's presence is recognized and the conversion
+  proceeds, but its VALUE is still deliberately not carried into Purp/Cd - the underlying 'not processed by Bank of
+  America' caution has not been overturned by any new evidence.]"
 - "51A Sending Institution: no evidence found either way in any attached document. Re-checked in v2.7 against the
   Bank of America MT103-to-pacs.008 guide specifically - still not mentioned there either. Still excluded."
 - "SUPERSEDED (v2.7 - see the v2.7 CHANGELOG NOTE above) - 77B Regulatory Reporting: no UHB citation, but real sample
@@ -1700,6 +2936,17 @@ validation_rules:
     v2.2 CHANGELOG: now machine-checked via rule_type - checked against
     the SOURCE message (parsedFields), not the converted tree - see
     ValidatorService.evalSourceAlternativeGroup().
+    v2.8 CHANGELOG: this rule was only ever evaluated AFTER a full conversion attempt (inside ValidatorService.validate(),
+    called from ConversionOrchestrator's retry loop), so a message failing VR005 was indistinguishable from a retryable
+    CONVERSION_ERROR - the orchestrator burned up to maxConverterRetries+2 pointless converter re-runs (retrying a source
+    message that can never change) before finally throwing ValidationFailedException. VR005's own params are pure
+    source-side data (parsedFields only, no dependency on the converted tree), so there was no actual reason to wait for a
+    conversion attempt at all. Added ValidatorService.checkMandatorySourceFields() (runs only source_alternative_group_required
+    rules) and wired it into ConversionOrchestrator.convert() immediately after parsing, before the retry loop - a message
+    missing a mandatory field now throws MandatorySourceFieldMissingException immediately, zero wasted converter attempts.
+    The original post-conversion check in ValidatorService.validate() was deliberately left in place too (defense in depth,
+    same reasoning as VR006's dual-mechanism note) in case a future caller invokes ConverterService without going through
+    this orchestrator.
 - rule_id: VR006
   description: Do not emit empty Dbtr or Cdtr elements as a fallback. If the source mandatory customer option is absent
     or cannot be parsed, reject conversion.
@@ -1770,4 +3017,186 @@ validation_rules:
     effective date. Added effective_date (ISO date) to params -
     evalStructuredAddress() now skips the check entirely (not even a
     warning - it isn't in effect yet) until the current date reaches it.
-character_set: SWIFT-X
+
+- rule_id: VR009
+  description: "Field 71G (Receiver's Charges) amount must not equal zero, per SWIFT Network Validated Rule D57."
+  applies_to:
+  - CdtTrfTxInf.ChrgsInf#1.Amt
+  severity: error
+  rule_type: amount_not_zero
+  params:
+    amount_field: "CdtTrfTxInf.ChrgsInf#1.Amt"
+  logic: >-
+    v2.17 ADDITION (2026-09-04, from live test case TC10): the real SWIFT MT103 Message Reference Guide (already fetched
+    and read directly, section 21 "Field 71G: Receiver's Charges", Network Validated Rules) states verbatim: "Amount
+    must not equal zero (Error code(s): D57)." Previously this document had no check for this at all - a message with
+    ":71G:GBP0,00" was silently accepted and translated to "<ChrgsInf><Amt Ccy=\"GBP\">0.00</Amt>...</ChrgsInf>",
+    propagating an invalid value downstream with zero warning. Machine-checked post-conversion (same pattern as
+    VR001/VR007), not inside 71G's own decimal_comma_to_dot transformation - that transformation's job is FORMAT
+    conversion (comma-to-dot, trailing-comma handling), not business-rule value validation; "0,00" is a syntactically
+    valid decimal, just a semantically forbidden one. See ValidatorService.evalAmountNotZero().
+    NOT extended to 71F: the real spec's Network Validated Rules for field 71F do not state an equivalent D57-style
+    zero-amount prohibition - only 71G's own field spec does. Do not assume symmetry without a citation.
+
+- rule_id: VR010
+  description: "Field 50a numbers 4 (Date of Birth) and 5 (Place of Birth) must either both be present or both be absent."
+  applies_to:
+  - CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt
+  - CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth
+  severity: error
+  rule_type: target_presence_requires_target_presence
+  params:
+    target_path_a: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt"
+    target_path_b: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth"
+  logic: >-
+    v2.18 ADDITION (2026-09-04, from live test case TC16): the real SWIFT MT103 Message Reference Guide (section 9,
+    Field 50a NETWORK VALIDATED RULES) states verbatim: "Number 4 must not be used without number 5 and vice versa."
+    pacs.008.001.08.xsd's own DateAndPlaceOfBirth1 independently confirms this structurally - BirthDt and
+    CityOfBirth/CtryOfBirth are ALL mandatory children (no minOccurs=0) whenever DtAndPlcOfBirth is used at all, so a
+    50a with "4/" but no "5/" (or vice versa) would otherwise silently produce a partially-populated, XSD-invalid
+    DtAndPlcOfBirth rather than a clear rejection. Checked against BirthDt vs CtryOfBirth specifically (not
+    CityOfBirth) purely as the representative pair - both 5/'s own sub-elements (CityOfBirth, CtryOfBirth) are
+    always written together by the SAME decompose_party pass (see 50F's own sub_elements), so checking either one
+    against BirthDt is equivalent; this is not a partial check.
+
+- rule_id: VR011
+  description: "If field 23B (Bank Operation Code) is SPRI, field 53a must not be used with option D."
+  applies_to:
+  - "23B"
+  - "53D"
+  severity: error
+  rule_type: value_forbids_presence
+  params:
+    trigger_field: "23B"
+    trigger_values: ["SPRI"]
+    forbidden_field: "53D"
+  logic: >-
+    v2.19 ADDITION (2026-09-04, from live test case TC28): the real SWIFT MT103 Message Reference Guide (section
+    "MT 103 Network Validated Rules", rule C4) states verbatim: "If field 23B contains one of the codes SPRI, SSTD
+    or SPAY, field 53a must not be used with option D (Error code(s): E03)." Only the SPRI branch is checked here
+    (matching TC28's own case) - SSTD/SPAY were not part of this test batch and are left for a future addition
+    rather than assumed identical without re-confirming trigger_values against the source. Checked purely against
+    parsedFields (source-side, like VR005) since this is a rule about which MT SYNTAX combinations are legal, not
+    about the converted output. Previously this combination was rejected only incidentally, because field 53D
+    itself was entirely unmapped (see the new 53D entry above) - meaning the message failed for the WRONG reason
+    (unmapped field) rather than the right one (an invalid SPRI/53D combination); now that 53D is mapped, this rule
+    is the one that actually catches the violation.
+
+- rule_id: VR012
+  description: "If field 56a (Intermediary Institution) is present, field 57a must also be present."
+  applies_to:
+  - "56A"
+  - "57A"
+  - "57D"
+  severity: error
+  rule_type: source_presence_requires_source_presence
+  params:
+    trigger_field: "56A"
+    required_any_of: ["57A", "57D"]
+  logic: >-
+    v2.19 ADDITION (2026-09-04, from live test case TC25): the real SWIFT MT103 Message Reference Guide (section "MT
+    103 Network Validated Rules", rule C9) states verbatim: "If field 56a is present, field 57a must also be present
+    (Error code(s): C81)." required_any_of covers both 57A and 57D (option D counts as "57a is present" at the
+    source-field level, per the spec's own field-numbering convention of grouping options under one rule number).
+    Checked purely against parsedFields, not the converted tree - CdtrAgt is ALWAYS populated regardless (it falls
+    back to the Receiver BIC when 57A/57D are both absent), so a target-side presence check could never distinguish
+    "57a was genuinely given" from "the fallback fired," making this a case where only VR005's source-side pattern
+    (not VR001/VR010's target-side pattern) can express the rule correctly. Only trigger 56A -> requires 57a is
+    implemented (matching TC25); 56C/56D are separately out of scope, not sourced.
+
+- rule_id: VR013
+  description: "If field 23B is SPRI, SSTD, or SPAY, the beneficiary account (subfield 1 of field 59a) is mandatory."
+  applies_to:
+  - "23B"
+  - "CdtTrfTxInf.CdtrAcct"
+  severity: error
+  rule_type: value_requires_target_presence
+  params:
+    trigger_field: "23B"
+    trigger_values: ["SPRI", "SSTD", "SPAY"]
+    target_path: "CdtTrfTxInf.CdtrAcct"
+  logic: >-
+    v2.19 ADDITION (2026-09-04, from live test case TC30): the real SWIFT MT103 Message Reference Guide (section "MT
+    103 Network Validated Rules", rule C12) states verbatim: "If field 23B contains one of the codes SPRI, SSTD or
+    SPAY, subfield 1 (Account) in field 59a Beneficiary Customer is mandatory (Error code(s): E10)." Unlike VR011/
+    VR012, this checks the CONVERTED TARGET (CdtTrfTxInf.CdtrAcct), not a source field - deliberately: this
+    document's own 59/59A/59F entries only populate CdtrAcct when the source itself carries an account line at all
+    (see those entries' own edge_cases), so "was CdtrAcct populated" is already an accurate proxy for "did field 59a
+    carry subfield 1," with no fallback-masking risk equivalent to VR012's CdtrAgt situation above (there is no
+    Receiver-account fallback the way there is a Receiver-BIC fallback for the agent). All three trigger codes
+    (SPRI/SSTD/SPAY) are included, per the spec's own C12 wording listing all three together (unlike C4/VR011, where
+    only SPRI was directly tested and the others were deliberately left unconfirmed).
+
+- rule_id: VR014
+  description: "If field 59F (Beneficiary Customer, option F) is present, the mandatory number-3 (Country) line must be present."
+  applies_to:
+  - "59F"
+  - CdtTrfTxInf.Cdtr.PstlAdr.Ctry
+  severity: error
+  rule_type: source_presence_requires_target_presence
+  params:
+    source_trigger_field: "59F"
+    target_path: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
+  logic: >-
+    v2.20 ADDITION (2026-09-04, from live test case TC33): the real SWIFT MT103 field spec states verbatim, for
+    option F's subfield 2 (Name and Address): "A line starting with number 3 must be present." Checked against the
+    SOURCE field 59F's own presence (not a derived target like Cdtr/Nm), deliberately using the new ONE-DIRECTIONAL
+    source_presence_requires_target_presence rule type rather than the existing bidirectional
+    presence_requires_presence: bare field 59's own structured_address (libpostal) enrichment can ALSO legitimately
+    populate this SAME Cdtr/PstlAdr/Ctry path through a completely different mechanism - a bidirectional check would
+    incorrectly flag a valid bare-59-plus-successful-libpostal message as a violation, since 59F specifically wasn't
+    what populated Ctry that time. This was checked directly (not assumed) after noticing bare-59's
+    structured_address.targets already includes "country" (see that entry's own v2.16 note).
+    Only the forward direction matters for this rule anyway - "59F present therefore Ctry required" is what C-rule
+    C33-equivalent language actually says; "Ctry present therefore 59F required" was never a real constraint (Ctry
+    can legitimately come from other sources).
+
+- rule_id: VR015
+  description: "Field 20 (Sender's Reference) must not start or end with '/' and must not contain '//' anywhere."
+  applies_to:
+  - "20"
+  severity: error
+  rule_type: source_format_forbidden_pattern
+  params:
+    source_field: "20"
+    forbidden_pattern: "^/|/$|//"
+  logic: >-
+    v2.21 ADDITION (2026-09-04, from live test case TC48): SWIFT Network Validated Rule T26 applies to reference-type
+    fields such as field 20 (Sender's Reference) - a value starting or ending with a slash, or containing two
+    consecutive slashes anywhere, is invalid. No validation of this existed anywhere in this document previously;
+    field 20 was only checked for mandatory-presence and max_length (16/35 chars, see its two field_mappings
+    entries), never its internal format - a value like "/20250904REF01" would have been silently copied through into
+    both GrpHdr/MsgId and PmtId/InstrId without complaint. Deliberately checks the RAW source value (not the
+    converted target), consistent with this being a SOURCE-message format defect, not a conversion-mapping defect -
+    the value would be copied through unchanged either way, so checking either side catches it, but the source is the
+    more honest place to flag a malformed INPUT.
+
+- rule_id: VR016
+  description: "Field 32A's currency (IntrBkSttlmAmt/@Ccy) must not be a precious-metal ISO 4217 code (XAU, XAG, XPD, XPT)."
+  applies_to:
+  - "32A"
+  - CdtTrfTxInf.IntrBkSttlmAmt.@Ccy
+  severity: error
+  rule_type: target_value_forbidden_set
+  params:
+    target_path: "CdtTrfTxInf.IntrBkSttlmAmt.@Ccy"
+    forbidden_values:
+    - XAU
+    - XAG
+    - XPD
+    - XPT
+  logic: >-
+    v2.21 ADDITION (2026-09-04, from live test case TC49): XAU/XAG/XPD/XPT (gold/silver/palladium/platinum) are
+    real, valid ISO 4217 currency codes, but they denote precious-metal trading units, not settleable fund currencies
+    - an MT103/pacs.008 interbank funds transfer settling in one of these codes is not a legitimate real-world case
+    (precious-metal-related SWIFT traffic uses a different message family entirely). This document's existing
+    allowed_pattern on the 32A currency entry ("^[A-Z]{3}$") only enforces ISO 4217's lexical SHAPE (three uppercase
+    letters), not this semantic exclusion - a message with currency=XAU previously passed through uncaught.
+    SOURCING CAVEAT, stated plainly: this document's fetched primary sources for this session (the SWIFT MT103
+    Standards MRG, the Bank of America formatting guide, the TARGET2 Annex 5.1.x tables, the JPMorgan migration
+    guide) were re-checked and none of them enumerate a specific MT103 rule ID for this exclusion by name (the batch-5
+    test's own analysis referred to it as "rule C08", which this document has NOT independently verified against any
+    of those sources) - so this rule is implemented on the well-established, widely-documented real-world convention
+    that precious-metal ISO 4217 codes are excluded from ordinary funds-settlement fields, not on a directly-cited
+    SWIFT rule number. Flagged here rather than silently assumed, consistent with this document's existing "Yes"/"No"
+    SWIFT-verified distinction elsewhere (e.g. the TILTIME/FROTIME/REJTIME 13C entries).

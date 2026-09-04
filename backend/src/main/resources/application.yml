@@ -11,6 +11,12 @@ spring:
   # needing @JsonProperty annotations scattered everywhere.
   jackson:
     property-naming-strategy: SNAKE_CASE
+  # Spring's defaults (1MB file / 10MB request) are too small for some
+  # real ISO 20022 XSDs bundled with several xs:include'd common types.
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
 
 # Server runs on 8000 by default specifically so the existing React
 # frontend (VITE_API_BASE_URL default = http://localhost:8000) keeps
@@ -29,6 +35,13 @@ mtmx:
   max-converter-retries: 2
   gemini-api-key: ${GEMINI_API_KEY:}
   groq-api-key: ${GROQ_API_KEY:}
+  # Opt-in structured-address enrichment (see address-parser-service/ and
+  # ConverterService.enrichWithStructuredAddress) - off by default so
+  # existing deployments without the sidecar running keep today's
+  # AdrLine-only behavior. Enable ahead of the 14 November 2026 Swift
+  # structured/hybrid address requirement.
+  address-parser-enabled: ${MTMX_ADDRESS_PARSER_ENABLED:false}
+  address-parser-url: ${MTMX_ADDRESS_PARSER_URL:http://localhost:8090/parse-address}
 
 logging:
   level:

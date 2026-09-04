@@ -44,6 +44,11 @@ public class GlobalExceptionHandler {
         return respond("parse", e, null, null, null);
     }
 
+    @ExceptionHandler(MandatorySourceFieldMissingException.class)
+    public ResponseEntity<Map<String, Object>> handleMandatorySourceFieldMissing(MandatorySourceFieldMissingException e) {
+        return respond("parse", e, null, e.getProblems(), null);
+    }
+
     @ExceptionHandler(SemanticDecompositionGapException.class)
     public ResponseEntity<Map<String, Object>> handleDecompositionGap(SemanticDecompositionGapException e) {
         return respond("parse", e, null, null, null);
@@ -77,6 +82,11 @@ public class GlobalExceptionHandler {
         detail.put("message", e.getMessage());
         detail.put("pipeline_steps", ConversionOrchestrator.pipelineSteps("request"));
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("detail", detail));
+    }
+
+    @ExceptionHandler(MappingUploadConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleUploadConflict(MappingUploadConflictException e) {
+        return respond("upload", e, null, null, null);
     }
 
     @ExceptionHandler(MtmxException.class)

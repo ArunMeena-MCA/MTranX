@@ -39,3 +39,14 @@ export function detectSourceFormat(text) {
 
   return null;
 }
+
+/**
+ * Classifies a format string as MT or MX, using the same convention the
+ * backend itself already relies on for its MT-vs-MX rendering choice
+ * (ConverterService: doc.getTargetFormat().toUpperCase().startsWith("MT")).
+ * Reused here so the Convert page's direction toggle can filter/derive
+ * MT<->MX vs MX<->MT mapping pairs without inventing a second convention.
+ */
+export function isMtFormat(format) {
+  return typeof format === "string" && format.trim().toUpperCase().startsWith("MT");
+}

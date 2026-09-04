@@ -32,14 +32,6 @@ public class MappingRegistry {
         this.pojoMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
-    private String normalise(String fmt) {
-        return fmt.toUpperCase().replaceAll("[^A-Z0-9]", "");
-    }
-
-    private String filenameFor(String sourceFormat, String targetFormat) {
-        return normalise(sourceFormat) + "_TO_" + normalise(targetFormat) + ".yaml";
-    }
-
     public List<String> listAvailable() {
         File dir = new File(props.getMappingsDir());
         if (!dir.exists()) {
@@ -69,7 +61,7 @@ public class MappingRegistry {
     }
 
     public Map<String, Object> loadRaw(String sourceFormat, String targetFormat) {
-        String fname = filenameFor(sourceFormat, targetFormat);
+        String fname = MappingFilenames.mappingFilenameFor(sourceFormat, targetFormat);
         File file = new File(props.getMappingsDir(), fname);
         if (!file.exists()) {
             String available = String.join(", ", listAvailable());
