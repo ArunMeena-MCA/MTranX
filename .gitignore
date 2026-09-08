@@ -2,5 +2,14 @@ backend/.env
 target/
 backend/tests-fixtures
 frontend/node_modules/
+frontend/.env
 frontend/dist/
 frontend/.vite/
+TC batch-1.md
+TC batch-2.md
+TC batch-3.md
+TC batch-4.md
+TC batch-5.md
+TC batch-6.md
+TC batch-7.md
+Result_1-100.md

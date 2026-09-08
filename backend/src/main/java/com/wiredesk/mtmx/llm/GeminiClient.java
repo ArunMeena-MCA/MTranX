@@ -255,7 +255,7 @@ public class GeminiClient {
                 + "EXACT source_field or target_path string as given in the field mapping rules list below (e.g. "
                 + "'32A' or 'CdtTrfTxInf.IntrBkSttlmAmt'), not a paraphrase or a made-up path - the caller "
                 + "cross-checks this string against the mapping doc and flags anything it can't match.";
-        String user = "Source fields:\n" + parsedFields + "\n\n"
+        String user = "Source fields:\n" + describeParsedFields(parsedFields) + "\n\n"
                 + "Field mapping rules applied:\n" + describeRules(rules) + "\n\n"
                 + "Converted target fields:\n" + convertedTree;
 
@@ -292,12 +292,76 @@ public class GeminiClient {
      * included, which is consistently where this doc's authors put the
      * actual rule statement (e.g. the UHB/CBPR+ citation) before the
      * changelog commentary starts.
+     *
+     * BUG FIX (2026-09-07, from live test case TC43): a code_list_lookup entry's actual
+     * ground-truth mapping table (e.g. field 71A's BEN-&gt;CRED/OUR-&gt;DEBT/SHA-&gt;SHAR)
+     * was previously NEVER included here - only whichever sentence of `notes` happened to
+     * be first, which for 71A doesn't even mention the table (it's in the SECOND sentence,
+     * cut off by firstSentence() above). The audit model was therefore asked to judge
+     * whether "SHA converts to SHAR" is correct with no way to see this document's own
+     * authoritative answer, and produced a confident-sounding but wrong "should map to SHA,
+     * not SHAR" finding - not a flaky/non-deterministic failure, a genuinely blind one.
+     * Every code_list_lookup entry's table is now always included in full (it's a small,
+     * fixed key-value map, not prose - cheap to include and removes the guesswork entirely).
      */
+    /**
+     * BUG FIX (2026-09-08, from live test cases TC125/140): a repeated MT tag (e.g. field 71F
+     * appearing 3 times, newline-joined into one raw value by ParsedMessage.addField - see
+     * repeat_lines elsewhere in this document) was previously handed to the audit as raw Java
+     * Map.toString() output: "{71F=GBP20,00\nGBP20,00\nGBP20,00, 20=TC125REF0125, ...}" - the
+     * embedded newlines sit inside a comma-separated map rendering where the VALUES THEMSELVES
+     * also contain commas (SWIFT's own decimal separator, "20,00"), so the audit model had no
+     * reliable way to count how many actual occurrences existed, and started INVENTING a wrong
+     * count ("contains two occurrences... generated three", TC125; "appears only once... contains
+     * three", TC140) - a confidently-wrong finding, not a hallucination out of nowhere, but a
+     * direct consequence of unparseable input. Every field is now shown with an EXPLICIT,
+     * unambiguous occurrence count and each occurrence clearly delimited, so the audit never has
+     * to infer repetition count from raw string structure again.
+     */
+    private String describeParsedFields(Map<String, String> parsedFields) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> e : parsedFields.entrySet()) {
+            String[] lines = e.getValue().split("\\r?\\n");
+            if (lines.length > 1) {
+                sb.append("- ").append(e.getKey()).append(" (").append(lines.length).append(" occurrences): ");
+                for (int i = 0; i < lines.length; i++) {
+                    if (i > 0) {
+                        sb.append(" | ");
+                    }
+                    sb.append("[").append(i).append("]=").append(lines[i]);
+                }
+            } else {
+                sb.append("- ").append(e.getKey()).append(": ").append(e.getValue());
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
     private String describeRules(List<FieldMapping> rules) {
         StringBuilder sb = new StringBuilder();
         for (FieldMapping fm : rules) {
             sb.append("- ").append(fm.getSourceField()).append(" -> ").append(fm.getTargetPath())
                     .append(" [").append(fm.getTransformation()).append("]");
+            if (fm.getCodeList() != null && !fm.getCodeList().isEmpty()) {
+                sb.append(" code_list: ").append(fm.getCodeList());
+            }
+            // BUG FIX (2026-09-08, from live test case TC125, non-deterministically confirmed
+            // by TC140 succeeding on the identical shape): removing the wrong-COUNT hallucination
+            // (see describeParsedFields above) surfaced a second, related one - the audit read a
+            // literal "#0"/"#1" in a repeat_lines entry's own target_path (e.g. 71F's
+            // "ChrgsInf#0.Amt", 71G's "ChrgsInf#1.Amt") as a HARDCODED, fixed set of supported
+            // indices, and flagged a genuine third occurrence (ChrgsInf#2) as an unmapped
+            // MAPPING_GAP - even though repeat_lines dynamically resolves "#0" to "#0", "#1", "#2",
+            // ... per actual occurrence (see ConverterService.resolveRepeatedTargetPath), with no
+            // hardcoded limit at all. Every repeat_lines entry's target_path now carries an
+            // explicit disclaimer so the audit never has grounds to invent this gap, regardless of
+            // which specific message shape it happens to be reasoning about.
+            if (fm.isRepeatLines()) {
+                sb.append(" (REPEATS: \"#0\" in this target_path is NOT a fixed index - it dynamically ")
+                        .append("resolves to \"#0\", \"#1\", \"#2\", ... for however many times this source field ")
+                        .append("actually occurs in the message; do not flag a higher index as unmapped)");
+            }
             if (fm.getNotes() != null && !fm.getNotes().isBlank()) {
                 sb.append(" notes: ").append(firstSentence(fm.getNotes()));
             }

@@ -50,6 +50,21 @@ public class DecompositionRule {
      */
     private StructuredAddressRule structuredAddress;
 
+    /**
+     * Sub-element name -&gt; "upper"/"lower", applied to that sub-element's
+     * extracted value right before it is written to the tree - the
+     * decompose_party counterpart to FieldMapping.normalizeCase (see its own
+     * Javadoc for the full rationale: real MT senders are case-inconsistent
+     * for BIC/UETR-type content even though the schema requires a specific
+     * case). Keyed per sub-element, not per whole entry, since one
+     * decompose_party entry commonly produces several DIFFERENT sub-elements
+     * from the same raw value (e.g. 52A's BICFI vs its DbtrAgtAcct/Id
+     * sibling) that must not all get the same case treatment. Absent for a
+     * key (the default for every entry that doesn't opt in) means unchanged,
+     * existing behavior.
+     */
+    private Map<String, String> subElementCaseNormalize = new LinkedHashMap<>();
+
     public String getPatternDescription() {
         return patternDescription;
     }
@@ -130,5 +145,13 @@ public class DecompositionRule {
 
     public void setStructuredAddress(StructuredAddressRule structuredAddress) {
         this.structuredAddress = structuredAddress;
+    }
+
+    public Map<String, String> getSubElementCaseNormalize() {
+        return subElementCaseNormalize;
+    }
+
+    public void setSubElementCaseNormalize(Map<String, String> subElementCaseNormalize) {
+        this.subElementCaseNormalize = subElementCaseNormalize;
     }
 }

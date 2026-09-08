@@ -108,6 +108,44 @@ public class FieldMapping {
      */
     private String dateFromTargetPath;
 
+    /**
+     * Only used when transformation=decimal_comma_to_dot. The ALREADY-CONVERTED tree path
+     * (not a raw source field) holding this amount's ISO 4217 currency code, used to
+     * zero-pad the converted decimal value out to that currency's real minor-unit count
+     * (e.g. "1000.5" -> "1000.50" for GBP, but left at 3 decimals for a currency like KWD).
+     * Never TRUNCATES - a value already at or beyond the currency's precision is left as-is
+     * (that's ValidatorService's VR007 currency_precision_check's job to catch, not this
+     * entry's). Same field_mappings-ordering dependency as dateFromTargetPath above: the
+     * referenced currency entry must run earlier in the document than this one.
+     */
+    private String currencyFromTargetPath;
+
+    /**
+     * Only used when transformation=llm_assisted. When set, the LLM result is split into
+     * whitespace-boundary chunks of at most this many characters (see TransformationEngine.
+     * chunkText) and written across MULTIPLE occurrences of a repeatable target container
+     * instead of one - target_path must itself contain a literal "#0" placeholder (same
+     * convention as the decompose_party mid-path substitution ConverterService already uses
+     * for 23E/InstrForCdtrAgt) so "#0", "#1", ... resolve to separate elements, e.g.
+     * "CdtTrfTxInf.InstrForNxtAgt#0.InstrInf". See FieldMapping.gatePattern's sibling
+     * mechanisms for the established pattern of opt-in, target_path-driven repetition.
+     */
+    private Integer maxChunkLength;
+
+    /**
+     * Only used for transformation types that don't already route through
+     * decompose_party (direct_copy, conditional - both plain and repeat_lines):
+     * one of "upper"/"lower", applied to the final value right before it is
+     * written to the tree - see TransformationEngine.normalizeCase's Javadoc for
+     * why this exists (case-inconsistent real-world BIC/UETR senders) and why
+     * it's scoped this narrowly. decompose_party entries use the sibling
+     * DecompositionRule.subElementCaseNormalize instead, since a single
+     * decompose_party entry can produce several sub-elements that need
+     * DIFFERENT (or no) case treatment - e.g. 52A's BICFI needs upper-casing
+     * but its DbtrAgtAcct/Id sibling must not be forced to any case.
+     */
+    private String normalizeCase;
+
     private List<EdgeCase> conditionalRules = new ArrayList<>();
     private List<EdgeCase> edgeCases = new ArrayList<>();
     private String notes;
@@ -166,6 +204,14 @@ public class FieldMapping {
 
     public void setMinLength(Integer minLength) {
         this.minLength = minLength;
+    }
+
+    public String getNormalizeCase() {
+        return normalizeCase;
+    }
+
+    public void setNormalizeCase(String normalizeCase) {
+        this.normalizeCase = normalizeCase;
     }
 
     public String getAllowedPattern() {
@@ -262,6 +308,22 @@ public class FieldMapping {
 
     public void setDateFromTargetPath(String dateFromTargetPath) {
         this.dateFromTargetPath = dateFromTargetPath;
+    }
+
+    public String getCurrencyFromTargetPath() {
+        return currencyFromTargetPath;
+    }
+
+    public void setCurrencyFromTargetPath(String currencyFromTargetPath) {
+        this.currencyFromTargetPath = currencyFromTargetPath;
+    }
+
+    public Integer getMaxChunkLength() {
+        return maxChunkLength;
+    }
+
+    public void setMaxChunkLength(Integer maxChunkLength) {
+        this.maxChunkLength = maxChunkLength;
     }
 
     public List<EdgeCase> getConditionalRules() {

@@ -49,7 +49,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC01REF0001</MsgId>
-      <CreDtTm>2026-09-04T08:31:38.667Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:35:55.566Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -116,7 +116,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -150,7 +149,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC02REF0002</MsgId>
-      <CreDtTm>2026-09-04T08:32:22.234Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:03.198Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -251,7 +250,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC03REF0003</MsgId>
-      <CreDtTm>2026-09-04T08:32:58.692Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:11.110Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -352,7 +351,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC04REF0004</MsgId>
-      <CreDtTm>2026-09-04T08:33:45.117Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:18.634Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -459,7 +458,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC05REF0005</MsgId>
-      <CreDtTm>2026-09-04T08:36:54.685Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:27.399Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -533,7 +532,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -567,7 +565,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC06REF0006</MsgId>
-      <CreDtTm>2026-09-04T08:40:14.066Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:35.004Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -670,10 +668,93 @@ MARY JONES
 
 **Your XML result:**
 ```
-Conversion stopped
-TransformationException
-Value 'GBP15,00
-GBP15,00' does not match extract_pattern for field 71F
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC07REF0007</MsgId>
+      <CreDtTm>2026-09-07T04:36:45.761Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC07REF0007</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111117</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="GBP">970.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>CRED</ChrgBr>
+      <ChrgsInf>
+        <Amt Ccy="GBP">15.00</Amt>
+        <Agt>
+          <FinInstnId>
+            <BICFI>TESTGB01XXX</BICFI>
+          </FinInstnId>
+        </Agt>
+      </ChrgsInf>
+      <ChrgsInf>
+        <Amt Ccy="GBP">15.00</Amt>
+        <Agt>
+          <FinInstnId>
+            <BICFI>TESTGB01XXX</BICFI>
+          </FinInstnId>
+        </Agt>
+      </ChrgsInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -702,9 +783,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-Validation failed
-ValidationFailedException
-Validation failed after retries. Errors: [[VR001] If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange Rate must be present. - CdtTrfTxInf.XchgRate is required because CdtTrfTxInf.InstdAmt (Ccy=USD) differs from CdtTrfTxInf.IntrBkSttlmAmt (Ccy=GBP), but it is absent]
+{"detail":{"error_type":"LlmResponseException","stage":"unknown","message":"Gemini API returned HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.5-flash-lite\\nPlease retry in 45.776261925s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/generate_content_free_tier_requests\",\n            \"quotaId\": \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-3.5-flash-lite\"\n            },\n            \"quotaValue\": \"15\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"45s\"\n      }\n    ]\n  }\n}\n","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"done"}]}}
 ```
 
 ---
@@ -737,7 +816,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC09REF0009</MsgId>
-      <CreDtTm>2026-09-04T08:43:00.263Z</CreDtTm>
+      <CreDtTm>2026-09-07T04:36:58.452Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -803,7 +882,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -832,86 +910,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC10REF0010</MsgId>
-      <CreDtTm>2026-09-04T08:43:46.871Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC10REF0010</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111120</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="GBP">1000.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>DEBT</ChrgBr>
-      <ChrgsInf>
-        <Amt Ccy="GBP">0.00</Amt>
-        <Agt>
-          <FinInstnId>
-            <BICFI>TESTGB02XXX</BICFI>
-          </FinInstnId>
-        </Agt>
-      </ChrgsInf>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR009] Field 71G (Receiver's Charges) amount must not equal zero, per SWIFT Network Validated Rule D57. - CdtTrfTxInf.ChrgsInf#1.Amt=0.00 must not equal zero]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR009] Field 71G (Receiver's Charges) amount must not equal zero, per SWIFT Network Validated Rule D57. - CdtTrfTxInf.ChrgsInf#1.Amt=0.00 must not equal zero"],"warnings":[]}}
 ```
 
 ---

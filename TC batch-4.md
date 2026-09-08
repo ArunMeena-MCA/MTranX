@@ -33,7 +33,7 @@ DEUTDEFF
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC31REF0031</MsgId>
-      <CreDtTm>2026-09-04T10:43:41.371Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:09:43.217Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -103,7 +103,6 @@ DEUTDEFF
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -138,7 +137,7 @@ LONDON
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC32REF0032</MsgId>
-      <CreDtTm>2026-09-04T10:45:16.998Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:09:50.875Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -194,6 +193,7 @@ LONDON
       <Cdtr>
         <Nm>GLOBAL EXPORTS LTD</Nm>
         <PstlAdr>
+          <Ctry>SG</Ctry>
           <AdrLine>456 COMMERCE STREET</AdrLine>
         </PstlAdr>
       </Cdtr>
@@ -207,7 +207,6 @@ LONDON
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -236,81 +235,7 @@ LONDON
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC33REF0033</MsgId>
-      <CreDtTm>2026-09-04T10:45:46.863Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC33REF0033</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111143</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="EUR">980.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>INCOMPLETE BENEFICIARY LTD</Nm>
-        <PstlAdr>
-          <AdrLine>UNKNOWN STREET</AdrLine>
-        </PstlAdr>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>55667788</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR014] If field 59F (Beneficiary Customer, option F) is present, the mandatory number-3 (Country) line must be present. - source field '59F' is present but CdtTrfTxInf.Cdtr.PstlAdr.Ctry was not populated]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR014] If field 59F (Beneficiary Customer, option F) is present, the mandatory number-3 (Country) line must be present. - source field '59F' is present but CdtTrfTxInf.Cdtr.PstlAdr.Ctry was not populated"],"warnings":[]}}
 ```
 
 ---
@@ -345,7 +270,7 @@ LONDON
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC34REF0034</MsgId>
-      <CreDtTm>2026-09-04T10:46:46.548Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:10:08.520Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -399,7 +324,10 @@ LONDON
         </FinInstnId>
       </CdtrAgt>
       <Cdtr>
-        <Nm>DEPT OF PROMOTION OF SPICY FISH</Nm>
+        <Nm>DEPT OF PROMOTION OF SPICY FISH CENTER FOR INTERNATIONALISATION</Nm>
+        <PstlAdr>
+          <Ctry>CN</Ctry>
+        </PstlAdr>
       </Cdtr>
       <CdtrAcct>
         <Id>
@@ -411,7 +339,6 @@ LONDON
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -440,9 +367,80 @@ MARY JONES
 
 **Your XML result:**
 ```
-Couldn't read this message
-SemanticDecompositionGapException
-Cannot semantically decompose field '70' (value=/INV/2026-04512-A): The raw value starts with /INV/ instead of the required /ROC/ prefix specified for extracting the EndToEndId.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC35REF0035</MsgId>
+      <CreDtTm>2026-09-07T12:10:16.351Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC35REF0035</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111145</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">620.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>/INV/2026-04512-A</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -471,7 +469,80 @@ MARY JONES
 
 **Your XML result:**
 ```
-Cannot semantically decompose field '70' (value=/RFB/PAYMENT REF 998877): The raw value starts with /RFB/ instead of the required /ROC/ pattern for EndToEndId.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC36REF0036</MsgId>
+      <CreDtTm>2026-09-07T12:10:35.202Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC36REF0036</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111146</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="GBP">340.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>/RFB/PAYMENT REF 998877</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -505,7 +576,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC37REF0037</MsgId>
-      <CreDtTm>2026-09-04T10:53:27.757Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:10:42.970Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -568,13 +639,9 @@ MARY JONES
           </Othr>
         </Id>
       </CdtrAcct>
-      <RmtInf>
-        <Ustrd>/ROC/CUSTREF20260315AB</Ustrd>
-      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -608,7 +675,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC38REF0038</MsgId>
-      <CreDtTm>2026-09-04T10:54:50.793Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:10:50.668Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -677,7 +744,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -706,7 +772,80 @@ MARY JONES
 
 **Your XML result:**
 ```
-Cannot semantically decompose field '70' (value=RF18539007547034): The raw value does not begin with the required prefix /ROC/ as specified by the pattern description.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC39REF0039</MsgId>
+      <CreDtTm>2026-09-07T12:10:58.307Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC39REF0039</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111149</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">560.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>RF18539007547034</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -735,7 +874,80 @@ MARY JONES
 
 **Your XML result:**
 ```
-Cannot semantically decompose field '70' (value=/TSU/00000089963-0820-01/ABC-15/256214,): The raw value does not begin with the required /ROC/ prefix pattern specified for extracting the EndToEndId.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC40REF0040</MsgId>
+      <CreDtTm>2026-09-07T12:11:05.657Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC40REF0040</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111150</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">2600.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>/TSU/00000089963-0820-01/ABC-15/256214,</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---

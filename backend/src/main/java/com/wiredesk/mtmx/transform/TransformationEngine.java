@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -156,6 +158,33 @@ public class TransformationEngine {
         return value.toUpperCase();
     }
 
+    /**
+     * Opt-in, narrowly-scoped case fixup for values that are known by the target
+     * schema to be case-SPECIFIC (BIC -&gt; uppercase per BICFIDec2014Identifier's
+     * pattern; UETR -&gt; lowercase per its UUIDv4 pattern), applied AFTER the value
+     * has already been extracted/transformed but BEFORE it is written to the tree -
+     * unlike TransformationEngine.uppercase (a whole transformation type on its own),
+     * this is a small post-processing step any transformation can opt into via
+     * FieldMapping.normalizeCase / DecompositionRule.subElementCaseNormalize.
+     * Deliberately NOT applied to free-text content (names, addresses, remittance
+     * info) - only to the specific BIC/UETR target paths that are wired to it in the
+     * mapping doc, since SWIFT MT senders are known to be case-inconsistent for
+     * these two identifier types even though the real MT character set is
+     * conventionally uppercase-only. Unknown/null mode is a no-op (fail safe, not
+     * fail closed - a mapping-doc typo here should not corrupt an otherwise-valid
+     * value).
+     */
+    public String normalizeCase(String value, String mode) {
+        if (value == null || mode == null) {
+            return value;
+        }
+        return switch (mode) {
+            case "upper" -> value.toUpperCase();
+            case "lower" -> value.toLowerCase();
+            default -> value;
+        };
+    }
+
     public String extractSubstring(String value, FieldMapping fm) {
         Pattern pattern = Pattern.compile(fm.getExtractPattern());
         Matcher matcher = pattern.matcher(value);
@@ -215,16 +244,110 @@ public class TransformationEngine {
      * is not valid XSD decimal lexical form, and appending an invented
      * "0" would add precision the source never stated - so a bare
      * trailing comma is simply dropped, leaving the integer value as-is.
+     *
+     * BUG FIX (2026-09-07, from live test case TC99): the comma itself was previously
+     * OPTIONAL in the validation regex ("(,\d*)?"), so a value with no comma at all (e.g.
+     * "1000") passed silently - but the SWIFT MT amount subfield format ("15d", decimal
+     * number notation) makes the comma a MANDATORY structural separator, always present
+     * even for a whole number (as this method's own doc comment above already establishes
+     * for the "116," case) - TC59's own passing JPY case relies on exactly that rule. A
+     * bare "1000" with no comma at all is not valid SWIFT amount notation and must be
+     * rejected, not silently accepted as if it were "1000,". The comma is now mandatory in
+     * the pattern; only the digits AFTER it remain optional.
      */
     public String decimalCommaToDot(String value, FieldMapping fm) {
-        if (!value.matches("[+-]?\\d+(,\\d*)?")) {
+        if (!value.matches("[+-]?\\d+,\\d*")) {
             throw new TransformationException("Value '" + value + "' is not a valid decimal for field "
-                    + fm.getSourceField());
+                    + fm.getSourceField() + " - SWIFT amount notation requires a decimal comma, even for a whole "
+                    + "number (e.g. '1000,'), not a bare integer.");
         }
         if (value.endsWith(",")) {
             return value.substring(0, value.length() - 1);
         }
         return value.replace(',', '.');
+    }
+
+    /**
+     * Same ISO 4217 minor-unit exceptions ValidatorService.CURRENCY_PRECISION_CHECK already
+     * uses to REJECT too many fractional digits - reused here to zero-PAD too few, so
+     * "1000.5" (GBP, 2 decimals) renders as "1000.50" rather than a mathematically-identical
+     * but inconsistently-formatted xs:decimal. Kept as a separate copy in this class (not a
+     * shared constant) - ValidatorService and TransformationEngine are deliberately
+     * independent, self-contained concerns in this document's existing architecture, and this
+     * is a small, stable, well-established table.
+     */
+    private static final Map<String, Integer> CURRENCY_MINOR_UNITS = Map.ofEntries(
+            Map.entry("JPY", 0), Map.entry("KRW", 0), Map.entry("VND", 0), Map.entry("CLP", 0),
+            Map.entry("ISK", 0), Map.entry("XOF", 0), Map.entry("XAF", 0), Map.entry("XPF", 0),
+            Map.entry("GNF", 0), Map.entry("RWF", 0), Map.entry("UGX", 0), Map.entry("PYG", 0),
+            Map.entry("VUV", 0), Map.entry("DJF", 0), Map.entry("KMF", 0), Map.entry("BIF", 0),
+            Map.entry("BHD", 3), Map.entry("KWD", 3), Map.entry("OMR", 3), Map.entry("JOD", 3),
+            Map.entry("TND", 3), Map.entry("LYD", 3), Map.entry("IQD", 3)
+    );
+
+    /**
+     * BUG FIX (2026-09-07, from live test case TC66): "1000.5" and "1000.50" are the same
+     * xs:decimal VALUE, so this was never a correctness bug - but real-world consumers
+     * downstream of this converter generally expect an amount rendered at its currency's
+     * actual minor-unit count, not a source-dependent number of digits. Zero-pads the
+     * fractional part out to the target currency's precision (default 2, matching
+     * ValidatorService's own default for an unlisted currency) - never truncates a value that
+     * already has that many digits or more; a currency with TOO MANY digits is
+     * ValidatorService's VR007 currency_precision_check's job to reject, not this method's to
+     * silently fix.
+     */
+    public String padDecimalToCurrencyPrecision(String value, String currency) {
+        if (currency == null) {
+            return value;
+        }
+        int minorUnits = CURRENCY_MINOR_UNITS.getOrDefault(currency, 2);
+        int dot = value.indexOf('.');
+        String intPart = dot < 0 ? value : value.substring(0, dot);
+        String fracPart = dot < 0 ? "" : value.substring(dot + 1);
+        if (fracPart.length() >= minorUnits) {
+            return value;
+        }
+        // minorUnits == 0 always returns early above (fracPart.length() >= 0 is always true),
+        // so reaching here means minorUnits >= 1 and a "." is always needed.
+        StringBuilder padded = new StringBuilder(fracPart);
+        while (padded.length() < minorUnits) {
+            padded.append('0');
+        }
+        return intPart + "." + padded;
+    }
+
+    /**
+     * BUG FIX (2026-09-08, from live test case TC129): field 72 permits up to 6 lines of 35
+     * characters (210 chars total) with NO codeword at all - but the pacs.008 target this
+     * document routes uncoded content to (InstrForNxtAgt/InstrInf) is Max140Text, so a
+     * legitimately-long, entirely valid field 72 previously failed XSD validation outright
+     * rather than converting. Confirmed directly against pacs.008.001.08.xsd:
+     * InstrForNxtAgt itself is maxOccurs="unbounded" (same repeatable-container shape already
+     * fixed for InstrForCdtrAgt/23E, see ConverterService's "#0" mid-path substitution
+     * mechanism) - so long content is split across MULTIPLE InstrForNxtAgt occurrences instead
+     * of being force-fit into one. Splits on whitespace boundaries (never mid-word) so each
+     * chunk is at most maxLen characters; a single "word" longer than maxLen is placed alone in
+     * its own chunk rather than silently dropped or truncated (this document's existing
+     * "reject or preserve in full, never mangle" philosophy - see the field 70 Ustrd 140-char
+     * edge_case's identical stance).
+     */
+    public List<String> chunkText(String value, int maxLen) {
+        List<String> chunks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : value.split(" ")) {
+            if (current.length() == 0) {
+                current.append(word);
+            } else if (current.length() + 1 + word.length() <= maxLen) {
+                current.append(' ').append(word);
+            } else {
+                chunks.add(current.toString());
+                current = new StringBuilder(word);
+            }
+        }
+        if (current.length() > 0) {
+            chunks.add(current.toString());
+        }
+        return chunks;
     }
 
     /**

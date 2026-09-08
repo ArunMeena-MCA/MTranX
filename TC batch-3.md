@@ -34,7 +34,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC21REF0021</MsgId>
-      <CreDtTm>2026-09-04T10:11:45.146Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:07:52.529Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>COVE</SttlmMtd>
@@ -105,7 +105,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -134,7 +133,84 @@ MARY JONES
 
 **Your XML result:**
 ```
-No mapping rule for source field '53B'. These source field(s) were found in the input but have no entry in field_mappings for conversion 'MT103_TO_PACS008'. Add explicit rules for them, or set unmapped_fields_policy to 'ignore' or 'passthrough' if that is truly intended.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC22REF0022</MsgId>
+      <CreDtTm>2026-09-07T12:08:00.073Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>COVE</SttlmMtd>
+        <SttlmAcct>
+          <Id>
+            <Othr>
+              <Id>12345678901</Id>
+            </Othr>
+          </Id>
+        </SttlmAcct>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC22REF0022</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111132</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">2500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -170,7 +246,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC23REF0023</MsgId>
-      <CreDtTm>2026-09-04T10:13:44.676Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:08:07.742Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>COVE</SttlmMtd>
@@ -251,7 +327,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -282,10 +357,88 @@ MARY JONES
 
 **Your XML result:**
 ```
-Mapping document for 'MT103_TO_PACS008' is incomplete - refusing to guess.
-Missing/ambiguous items (1):
-  - XSD validation error: cvc-pattern-valid: Value '//FW021000089
-CHASUS33' is not facet-valid with respect to pattern '[A-Z0-9]{4,4}[A-Z]{2,2}[A-Z0-9]{2,2}([A-Z0-9]{3,3}){0,1}' for type 'BICFIDec2014Identifier'.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC24REF0024</MsgId>
+      <CreDtTm>2026-09-07T12:08:15.425Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC24REF0024</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111134</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">3200.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <IntrmyAgt1>
+        <FinInstnId>
+          <BICFI>CHASUS33</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Cd>USABA</Cd>
+            </ClrSysId>
+            <MmbId>021000089</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </IntrmyAgt1>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>ABNAUS33</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -314,83 +467,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC25REF0025</MsgId>
-      <CreDtTm>2026-09-04T10:22:35.733Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC25REF0025</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111135</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="USD">1800.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <IntrmyAgt1>
-        <FinInstnId>
-          <BICFI>IRVTUS3N</BICFI>
-        </FinInstnId>
-      </IntrmyAgt1>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR012] If field 56a (Intermediary Institution) is present, field 57a must also be present. - source field '56A' is present but none of [57A, 57D] are]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR012] If field 56a (Intermediary Institution) is present, field 57a must also be present. - source field '56A' is present but none of [57A, 57D] are"],"warnings":[]}}
 ```
 
 ---
@@ -424,7 +501,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC26REF0026</MsgId>
-      <CreDtTm>2026-09-04T10:23:58.106Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:08:46.545Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -490,7 +567,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -526,7 +602,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC27REF0027</MsgId>
-      <CreDtTm>2026-09-04T10:25:05.371Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:08:54.649Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -596,7 +672,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -626,7 +701,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-No mapping rule for source field '53D'. These source field(s) were found in the input but have no entry in field_mappings for conversion 'MT103_TO_PACS008'. Add explicit rules for them, or set unmapped_fields_policy to 'ignore' or 'passthrough' if that is truly intended.
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR011] If field 23B (Bank Operation Code) is SPRI, field 53a must not be used with option D. - source field '23B'=SPRI forbids source field '53D', but it is present]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR011] If field 23B (Bank Operation Code) is SPRI, field 53a must not be used with option D. - source field '23B'=SPRI forbids source field '53D', but it is present"],"warnings":[]}}
 ```
 
 ---
@@ -659,7 +734,7 @@ LONDON
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC29REF0029</MsgId>
-      <CreDtTm>2026-09-04T10:26:11.252Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:09:12.299Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -721,7 +796,6 @@ LONDON
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -748,71 +822,7 @@ LONDON
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC30REF0030</MsgId>
-      <CreDtTm>2026-09-04T10:27:22.926Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC30REF0030</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111140</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>SPRI</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="USD">1600.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>BENEFICIARY NAME ONLY</Nm>
-      </Cdtr>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR013] If field 23B is SPRI, SSTD, or SPAY, the beneficiary account (subfield 1 of field 59a) is mandatory. - source field '23B'=SPRI requires CdtTrfTxInf.CdtrAcct to be present, but it is absent]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR013] If field 23B is SPRI, SSTD, or SPAY, the beneficiary account (subfield 1 of field 59a) is mandatory. - source field '23B'=SPRI requires CdtTrfTxInf.CdtrAcct to be present, but it is absent"],"warnings":[]}}
 ```
 
 ---

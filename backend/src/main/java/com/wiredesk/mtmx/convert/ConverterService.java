@@ -84,7 +84,7 @@ public class ConverterService {
                 if (fm.isRepeatLines()) {
                     applyRepeatedConditional(fm, parsed.getFields(), tree, trace);
                 } else {
-                    String value = engine.conditional(fm, parsed.getFields());
+                    String value = engine.normalizeCase(engine.conditional(fm, parsed.getFields()), fm.getNormalizeCase());
                     if (value != null) {
                         tree.put(targetPath, value);
                         trace.add(traceRow(sourceField, targetPath, value, transformation));
@@ -168,8 +168,9 @@ public class ConverterService {
                     trace.add(traceRow(sourceField, targetPath, null, "skipped_with_warning"));
                 }
                 case "direct_copy" -> {
-                    tree.put(targetPath, engine.directCopy(rawValue));
-                    trace.add(traceRow(sourceField, targetPath, tree.get(targetPath), transformation));
+                    String value = engine.normalizeCase(engine.directCopy(rawValue), fm.getNormalizeCase());
+                    tree.put(targetPath, value);
+                    trace.add(traceRow(sourceField, targetPath, value, transformation));
                 }
                 case "code_list_lookup" -> {
                     tree.put(targetPath, engine.codeListLookup(rawValue, fm));
@@ -184,7 +185,16 @@ public class ConverterService {
                     trace.add(traceRow(sourceField, targetPath, tree.get(targetPath), transformation));
                 }
                 case "decimal_comma_to_dot" -> {
-                    tree.put(targetPath, engine.decimalCommaToDot(rawValue, fm));
+                    String converted = engine.decimalCommaToDot(rawValue, fm);
+                    // BUG FIX (2026-09-07, TC66): zero-pad to the currency's real minor-unit
+                    // count when this entry opts in via currency_from_target_path - see that
+                    // field's own Javadoc. Purely cosmetic (never changes the xs:decimal VALUE),
+                    // opt-in so entries without a paired currency (e.g. field 36's exchange
+                    // rate, which has no currency of its own) are unaffected.
+                    if (fm.getCurrencyFromTargetPath() != null) {
+                        converted = engine.padDecimalToCurrencyPrecision(converted, tree.get(fm.getCurrencyFromTargetPath()));
+                    }
+                    tree.put(targetPath, converted);
                     trace.add(traceRow(sourceField, targetPath, tree.get(targetPath), transformation));
                 }
                 case "date_format" -> {
@@ -231,11 +241,58 @@ public class ConverterService {
                             boolean isMatch = java.util.regex.Pattern.matches(cond.getPattern(), e.getValue());
                             fullPath = (isMatch ? cond.getIfMatchTarget() : cond.getElseTarget()) + suffix;
                         } else if (overrides != null && overrides.containsKey(baseName)) {
-                            fullPath = overrides.get(baseName) + suffix;
+                            String override = overrides.get(baseName);
+                            // BUG FIX (2026-09-08, from live test cases TC105/136): previously ALWAYS
+                            // appended suffix at the very end of the override string - correct for a
+                            // repeatable LEAF (e.g. "...PstlAdr.AdrLine" + "#0" = "...PstlAdr.AdrLine#0",
+                            // still one AdrLine per index under the SAME parent), but wrong when the
+                            // REPEATABLE element is a CONTAINER partway through the path (e.g. 23E's
+                            // Cd entry: InstrForCdtrAgt itself repeats, maxOccurs=unbounded, with Cd as
+                            // its own non-repeating child) - two Cd-eligible codes on the same message
+                            // (e.g. "TELB\nPHOB", both matching the SAME regex) need
+                            // "InstrForCdtrAgt#0.Cd" and "InstrForCdtrAgt#1.Cd", not
+                            // "InstrForCdtrAgt.Cd#0"/"InstrForCdtrAgt.Cd#1" (which would try to put TWO
+                            // Cd children under ONE InstrForCdtrAgt, invalid, and previously silently
+                            // discarded everything past the first match instead). An override string
+                            // that already contains a literal "#0" placeholder now has the suffix
+                            // substituted IN PLACE of it (mirrors resolveRepeatedTargetPath's identical
+                            // "#0" -> "#i" substitution for the repeat_lines mechanism), rather than
+                            // appended - opt-in via the override author writing "#0" into the target
+                            // path itself, so every existing leaf-suffix override (none of which
+                            // contain "#0") is completely unaffected.
+                            fullPath = override.contains("#0") ? override.replace("#0", suffix) : override + suffix;
                         } else {
                             fullPath = targetPath + "." + baseName + suffix;
                         }
-                        tree.put(fullPath, e.getValue());
+                        // BUG FIX (2026-09-07, from live test cases TC37/50/100): a decompose_party
+                        // sub-element previously wrote its value unconditionally, even when it was a
+                        // blank string - unlike llm_assisted just below, which has ALWAYS skipped a
+                        // blank/null result for exactly this reason (see its own comment: an empty
+                        // element/attribute fails XSD minLength validation). This mattered nowhere
+                        // before because every existing regex either matched real content or didn't
+                        // match at all - but field 70's Ustrd entry (v2.22, concat: true) uses a
+                        // catch-everything pattern ("^(?:/ROC/[^/\n]*)?(.*)$") that ALWAYS matches each
+                        // line, even producing an empty capture when the entire line was consumed by
+                        // the optional /ROC/ prefix (e.g. a field 70 that is ONLY "/ROC/value", nothing
+                        // else) - concat then joined a single empty string into "", which sailed
+                        // through into RmtInf/Ustrd as an empty element and failed XSD validation.
+                        // Skip writing entirely when the value is blank, matching decompose_party's own
+                        // existing "unmatched optional sub-element produces no entry at all" semantics.
+                        if (e.getValue() == null || e.getValue().isBlank()) {
+                            continue;
+                        }
+                        // Opt-in per-sub-element case fixup (e.g. BICFI -> upper, distinct from a
+                        // sibling account sub-element that must NOT be forced to any case) - see
+                        // DecompositionRule.subElementCaseNormalize's Javadoc. Written back into
+                        // the entry itself (not just a local variable) so the trace row built from
+                        // `sub` below reflects the actual written value, not the pre-normalization
+                        // one - every other transformation type's trace row already shows the real
+                        // written value, so decompose_party's own diagnostic trace should not be the
+                        // one place a debugger sees a value that never actually reached the tree.
+                        String subValue = engine.normalizeCase(e.getValue(),
+                                fm.getDecomposition().getSubElementCaseNormalize().get(baseName));
+                        e.setValue(subValue);
+                        tree.put(fullPath, subValue);
                     }
                     enrichWithStructuredAddress(fm.getDecomposition().getStructuredAddress(), sub, tree, trace, sourceField);
                     trace.add(traceRow(sourceField, targetPath, sub, transformation));
@@ -261,8 +318,26 @@ public class ConverterService {
                     // decompose_party already does for an unmatched optional
                     // sub-element.
                     if (value != null && !value.isBlank()) {
-                        tree.put(targetPath, value);
-                        trace.add(traceRow(sourceField, targetPath, value, transformation));
+                        // BUG FIX (2026-09-08, from live test case TC129): field 72 permits up
+                        // to 210 chars of uncoded content with no codeword at all, but this
+                        // entry's target (InstrForNxtAgt/InstrInf) is Max140Text - a
+                        // legitimately long, entirely valid value previously failed XSD
+                        // validation outright. When maxChunkLength is set, split the LLM's
+                        // result into whitespace-boundary chunks and write one per repeatable
+                        // InstrForNxtAgt occurrence instead of force-fitting one oversized
+                        // value into a single element - see FieldMapping.maxChunkLength's
+                        // Javadoc and TransformationEngine.chunkText.
+                        if (fm.getMaxChunkLength() != null) {
+                            List<String> chunks = engine.chunkText(value, fm.getMaxChunkLength());
+                            for (int i = 0; i < chunks.size(); i++) {
+                                String chunkPath = targetPath.replace("#0", "#" + i);
+                                tree.put(chunkPath, chunks.get(i));
+                                trace.add(traceRow(sourceField, chunkPath, chunks.get(i), transformation));
+                            }
+                        } else {
+                            tree.put(targetPath, value);
+                            trace.add(traceRow(sourceField, targetPath, value, transformation));
+                        }
                     }
                 }
                 default -> throw new TransformationException(
@@ -339,10 +414,23 @@ public class ConverterService {
                 case "code_list_lookup" -> engine.codeListLookup(line, fm);
                 case "truncate" -> engine.truncate(line, fm);
                 case "uppercase" -> engine.uppercase(line);
-                case "decimal_comma_to_dot" -> engine.decimalCommaToDot(line, fm);
+                case "decimal_comma_to_dot" -> {
+                    String converted = engine.decimalCommaToDot(line, fm);
+                    // BUG FIX (2026-09-07, TC66): same currency_from_target_path opt-in as the
+                    // non-repeated case (see ConverterService.convert()'s own comment) - the
+                    // referenced path also needs the SAME "#0" -> "#i" resolution this repeated
+                    // amount's own target_path just got, since it's a per-occurrence currency
+                    // (e.g. ChrgsInf#0.Amt.@Ccy, ChrgsInf#1.Amt.@Ccy for 71F/71G).
+                    if (fm.getCurrencyFromTargetPath() != null) {
+                        String resolvedCcyPath = resolveRepeatedTargetPath(fm.getCurrencyFromTargetPath(), i);
+                        converted = engine.padDecimalToCurrencyPrecision(converted, tree.get(resolvedCcyPath));
+                    }
+                    yield converted;
+                }
                 case "date_format" -> engine.dateFormat(line, fm);
                 default -> throw new IllegalStateException(transformation); // unreachable, guarded above
             };
+            value = engine.normalizeCase(value, fm.getNormalizeCase());
             tree.put(resolvedPath, value);
             trace.add(traceRow(sourceField, resolvedPath, value, transformation));
         }
@@ -374,7 +462,7 @@ public class ConverterService {
         String repeatField = rule.getCheckFields().get(0);
         String repeatRaw = allFields.get(repeatField);
         if (repeatRaw == null) {
-            String value = engine.conditional(fm, allFields);
+            String value = engine.normalizeCase(engine.conditional(fm, allFields), fm.getNormalizeCase());
             if (value != null) {
                 tree.put(fm.getTargetPath(), value);
                 trace.add(traceRow(fm.getSourceField(), fm.getTargetPath(), value, "conditional"));
@@ -387,6 +475,7 @@ public class ConverterService {
             String value = rule.getIfAnyPresentField() != null
                     ? allFields.get(rule.getIfAnyPresentField())
                     : rule.getIfAnyPresent();
+            value = engine.normalizeCase(value, fm.getNormalizeCase());
             if (value != null) {
                 tree.put(resolvedPath, value);
                 trace.add(traceRow(fm.getSourceField(), resolvedPath, value, "conditional"));

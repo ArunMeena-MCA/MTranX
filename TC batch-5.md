@@ -29,7 +29,80 @@ MARY JONES
 
 **Your XML result:**
 ```
-LLM-assisted conversion for field 13C returned low confidence: The raw source value contains /CLSTIME/0915+0100, but the notes specifically state that the expected codeword for CdtDtTm is RNCTIME and that the field is derived from RNCTIME. Additionally, there is a structural gap where CdtDtTm is an ISODateTime requiring a date, but only a time-only raw value is available.. Refusing to use a low-confidence value - tighten the mapping doc's notes/edge_cases for this field.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC41REF0041</MsgId>
+      <CreDtTm>2026-09-07T12:11:13.571Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC41REF0041</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111151</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">1000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <SttlmTmReq>
+        <CLSTm>09:15:00+01:00</CLSTm>
+      </SttlmTmReq>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -60,7 +133,84 @@ MARY JONES
 
 **Your XML result:**
 ```
-LLM-assisted conversion for field 13C returned low confidence: Target field DbtDtTm expects a full ISODateTime (date + time), but 13C provides only a time component without a sourced rule for which date to combine it with, making this entry unverified per the reference doc notes.. Refusing to use a low-confidence value - tighten the mapping doc's notes/edge_cases for this field.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC42REF0042</MsgId>
+      <CreDtTm>2026-09-07T12:11:21.847Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC42REF0042</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111152</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">1000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <SttlmTmIndctn>
+        <DbtDtTm>2026-03-15T09:20:00+01:00</DbtDtTm>
+        <CdtDtTm>2026-03-15T09:30:00+01:00</CdtDtTm>
+      </SttlmTmIndctn>
+      <SttlmTmReq>
+        <CLSTm>09:15:00+01:00</CLSTm>
+      </SttlmTmReq>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -90,8 +240,83 @@ MARY JONES
 
 **Your XML result:**
 ```
-LLM-assisted conversion for field 23E returned low confidence: The decision procedure explicitly states that if the 23E value is SDVA, INTC, or CORT, it should not be copied into InstrInf (SDVA goes to SvcLvl, INTC/CORT goes to CtgyPurp). Since the raw source value is 'SDVA
-INTC', it matches these excluded categories and cannot be mapped to InstrInf.. Refusing to use a low-confidence value - tighten the mapping doc's notes/edge_cases for this field.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC43REF0043</MsgId>
+      <CreDtTm>2026-09-07T12:11:33.453Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC43REF0043</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111153</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl>
+          <Cd>SDVA</Cd>
+        </SvcLvl>
+        <LclInstrm>
+          <Prtry>SPRI</Prtry>
+        </LclInstrm>
+        <CtgyPurp>
+          <Cd>INTC</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">1500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -121,8 +346,83 @@ MARY JONES
 
 **Your XML result:**
 ```
-LLM-assisted conversion for field 23E returned low confidence: The source value 'SDVA
-HOLD' triggers the rule for SDVA (which routes to SvcLvl per the notes) and HOLD, making this value ambiguous or invalid according to the strict decision procedure, and it cannot be safely copied verbatim.. Refusing to use a low-confidence value - tighten the mapping doc's notes/edge_cases for this field.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC44REF0044</MsgId>
+      <CreDtTm>2026-09-07T12:11:41.203Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC44REF0044</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111154</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl>
+          <Cd>SDVA</Cd>
+        </SvcLvl>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">800.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <InstrForCdtrAgt>
+        <Cd>HOLD</Cd>
+      </InstrForCdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -151,7 +451,77 @@ MARY JONES
 
 **Your XML result:**
 ```
-No mapping rule for source field '26T'. These source field(s) were found in the input but have no entry in field_mappings for conversion 'MT103_TO_PACS008'. Add explicit rules for them, or set unmapped_fields_policy to 'ignore' or 'passthrough' if that is truly intended.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC45REF0045</MsgId>
+      <CreDtTm>2026-09-07T12:11:49.059Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC45REF0045</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111155</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">650.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -186,7 +556,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC46REF0046</MsgId>
-      <CreDtTm>2026-09-04T11:13:22.179Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:11:56.589Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -211,16 +581,6 @@ MARY JONES
           <BICFI>ABNANL2A</BICFI>
         </FinInstnId>
       </PrvsInstgAgt1>
-      <PrvsInstgAgt2>
-        <FinInstnId>
-          <BICFI>ABNANL2A</BICFI>
-        </FinInstnId>
-      </PrvsInstgAgt2>
-      <PrvsInstgAgt3>
-        <FinInstnId>
-          <BICFI>ABNANL2A</BICFI>
-        </FinInstnId>
-      </PrvsInstgAgt3>
       <InstgAgt>
         <FinInstnId>
           <BICFI>TESTGB01XXX</BICFI>
@@ -270,7 +630,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -304,7 +663,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC47REF0047</MsgId>
-      <CreDtTm>2026-09-04T11:13:54.314Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:12:06.513Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -377,7 +736,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -405,78 +763,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>/TC48REF0048</MsgId>
-      <CreDtTm>2026-09-04T11:14:54.372Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>/TC48REF0048</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111158</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="EUR">700.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+Validation failed after retries. Errors: [[VR015] Field 20 (Sender's Reference) must not start or end with '/' and must not contain '//' anywhere. - source field '20' value '/TC48REF0048' violates the required format (matches forbidden pattern ^/|/$|//)]
 ```
 
 ---
@@ -504,78 +791,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC49REF0049</MsgId>
-      <CreDtTm>2026-09-04T11:15:12.587Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC49REF0049</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111159</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="XAU">1000.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR016] Field 32A's currency (IntrBkSttlmAmt/@Ccy) must not be a precious-metal ISO 4217 code (XAU, XAG, XPD, XPT). - CdtTrfTxInf.IntrBkSttlmAmt.@Ccy value 'XAU' is in the forbidden set for this field]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR016] Field 32A's currency (IntrBkSttlmAmt/@Ccy) must not be a precious-metal ISO 4217 code (XAU, XAG, XPD, XPT). - CdtTrfTxInf.IntrBkSttlmAmt.@Ccy value 'XAU' is in the forbidden set for this field"],"warnings":[]}}
 ```
 
 ---
@@ -618,7 +834,127 @@ MARY JONES
 
 **Your XML result:**
 ```
-No mapping rule for source field '26T'. These source field(s) were found in the input but have no entry in field_mappings for conversion 'MT103_TO_PACS008'. Add explicit rules for them, or set unmapped_fields_policy to 'ignore' or 'passthrough' if that is truly intended.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC50REF0050</MsgId>
+      <CreDtTm>2026-09-07T12:12:45.864Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>COVE</SttlmMtd>
+        <InstgRmbrsmntAgt>
+          <FinInstnId>
+            <BICFI>CHASUS33</BICFI>
+          </FinInstnId>
+        </InstgRmbrsmntAgt>
+        <InstdRmbrsmntAgt>
+          <FinInstnId>
+            <BICFI>IRVTUS3N</BICFI>
+          </FinInstnId>
+        </InstdRmbrsmntAgt>
+        <ThrdRmbrsmntAgt>
+          <FinInstnId>
+            <BICFI>BNPAFRPP</BICFI>
+          </FinInstnId>
+        </ThrdRmbrsmntAgt>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC50REF0050</InstrId>
+        <EndToEndId>FINALTEST0050</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111160</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+        <CtgyPurp>
+          <Cd>INTC</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">7500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <SttlmTmReq>
+        <CLSTm>10:00:00+01:00</CLSTm>
+      </SttlmTmReq>
+      <InstdAmt Ccy="USD">8250.00</InstdAmt>
+      <XchgRate>0.90909</XchgRate>
+      <ChrgBr>SHAR</ChrgBr>
+      <ChrgsInf>
+        <Amt Ccy="USD">25.00</Amt>
+        <Agt>
+          <FinInstnId>
+            <BICFI>TESTGB01XXX</BICFI>
+          </FinInstnId>
+        </Agt>
+      </ChrgsInf>
+      <PrvsInstgAgt1>
+        <FinInstnId>
+          <BICFI>ABNANL2A</BICFI>
+        </FinInstnId>
+      </PrvsInstgAgt1>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>KITCHEN SINK EXPORTS LTD</Nm>
+        <PstlAdr>
+          <TwnNm>BERLIN</TwnNm>
+          <Ctry>DE</Ctry>
+          <AdrLine>100 KITCHEN SINK AVENUE</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>99887766</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>KITCHEN SINK IMPORTS INC</Nm>
+        <PstlAdr>
+          <TwnNm>CHICAGO</TwnNm>
+          <Ctry>US</Ctry>
+          <AdrLine>200 FINAL AVENUE</AdrLine>
+        </PstlAdr>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>11224488</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RgltryRptg>
+        <DbtCdtRptgInd>DEBT</DbtCdtRptgInd>
+        <Dtls>
+          <Ctry>DE</Ctry>
+          <Inf>/ORDERRES/DE//BERLIN GERMANY</Inf>
+        </Dtls>
+      </RgltryRptg>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---

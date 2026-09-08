@@ -402,6 +402,9 @@ public class ValidatorService {
             case "source_presence_requires_target_presence" -> evalSourcePresenceRequiresTargetPresence(p, parsedFields, tree);
             case "source_format_forbidden_pattern" -> evalSourceFormatForbiddenPattern(p, parsedFields);
             case "target_value_forbidden_set" -> evalTargetValueForbiddenSet(p, tree);
+            case "value_requires_source_presence" -> evalValueRequiresSourcePresence(p, parsedFields);
+            case "value_and_source_presence_requires_target_presence" ->
+                    evalValueAndSourcePresenceRequiresTargetPresence(p, parsedFields, tree);
             default -> null;
         };
     }
@@ -597,6 +600,32 @@ public class ValidatorService {
     }
 
     /**
+     * VR020 shape (Rule C14, "if field 71A is BEN, at least one occurrence of field 71F is
+     * mandatory"): "if trigger_field's value is one of trigger_values, required_field must be
+     * present in the SOURCE message" - the source-side counterpart to evalValueRequiresTargetPresence
+     * below (which checks the CONVERTED tree instead). Kept separate for the same
+     * "don't conflate directions behind one flag" reasoning already documented there.
+     */
+    @SuppressWarnings("unchecked")
+    private String evalValueRequiresSourcePresence(Map<String, Object> p, Map<String, String> parsedFields) {
+        String triggerField = (String) p.get("trigger_field");
+        List<String> triggerValues = (List<String>) p.get("trigger_values");
+        String requiredField = (String) p.get("required_field");
+        if (triggerField == null || triggerValues == null || requiredField == null) {
+            return null;
+        }
+        String triggerValue = parsedFields.get(triggerField);
+        if (triggerValue == null || !triggerValues.contains(triggerValue.trim())) {
+            return null;
+        }
+        if (!parsedFields.containsKey(requiredField)) {
+            return "source field '" + triggerField + "'=" + triggerValue + " requires source field '" + requiredField
+                    + "' to be present (at least one occurrence), but it is absent";
+        }
+        return null;
+    }
+
+    /**
      * VR013 shape: MT rule "if trigger_field's value is one of trigger_values,
      * target_path must be present in the converted output" - e.g. Rule C12,
      * "if field 23B is SPRI/SSTD/SPAY, subfield 1 (Account) in field 59a is
@@ -622,6 +651,43 @@ public class ValidatorService {
         if (!presentUnder(tree, targetPath)) {
             return "source field '" + triggerField + "'=" + triggerValue + " requires " + targetPath
                     + " to be present, but it is absent";
+        }
+        return null;
+    }
+
+    /**
+     * VR026 shape (Rule C11's second half, TC110): a genuine three-way AND -
+     * "if trigger_field's value is one of trigger_values, AND required_source_field
+     * is present in the SOURCE message, THEN target_path must be present in the
+     * converted output" - e.g. "if 23B is SPRI/SSTD/SPAY and 57D is used, 57D's own
+     * Party Identifier subfield is mandatory." Deliberately NOT built by composing
+     * evalValueRequiresTargetPresence with evalSourcePresenceRequiresTargetPresence:
+     * neither alone can express that the target-presence requirement only activates
+     * when BOTH source-side gates hold at once (23B's value alone doesn't require
+     * this target - only when 57D was actually chosen; 57D's presence alone doesn't
+     * either - only under these service levels). Kept as its own rule_type rather
+     * than a generic "N-way AND" DSL, matching this document's existing one-shape-
+     * per-condition-pattern discipline (see evalValueForbidsPresence's doc comment).
+     */
+    @SuppressWarnings("unchecked")
+    private String evalValueAndSourcePresenceRequiresTargetPresence(Map<String, Object> p, Map<String, String> parsedFields, Map<String, String> tree) {
+        String triggerField = (String) p.get("trigger_field");
+        List<String> triggerValues = (List<String>) p.get("trigger_values");
+        String requiredSourceField = (String) p.get("required_source_field");
+        String targetPath = (String) p.get("target_path");
+        if (triggerField == null || triggerValues == null || requiredSourceField == null || targetPath == null) {
+            return null;
+        }
+        String triggerValue = parsedFields.get(triggerField);
+        if (triggerValue == null || !triggerValues.contains(triggerValue.trim())) {
+            return null;
+        }
+        if (!parsedFields.containsKey(requiredSourceField)) {
+            return null;
+        }
+        if (!presentUnder(tree, targetPath)) {
+            return "source field '" + triggerField + "'=" + triggerValue + " with source field '" + requiredSourceField
+                    + "' present requires " + targetPath + " to be present, but it is absent";
         }
         return null;
     }

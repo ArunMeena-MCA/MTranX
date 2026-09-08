@@ -49,7 +49,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC01REF0001</MsgId>
-      <CreDtTm>2026-09-04T09:12:57.633Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:04:33.583Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -116,7 +116,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -150,7 +149,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC02REF0002</MsgId>
-      <CreDtTm>2026-09-04T09:10:50.701Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:04:43.445Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -217,7 +216,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -252,7 +250,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC03REF0003</MsgId>
-      <CreDtTm>2026-09-04T09:13:25.733Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:04:51.004Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -320,7 +318,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -354,7 +351,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC04REF0004</MsgId>
-      <CreDtTm>2026-09-04T09:14:17.608Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:04:58.708Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -428,7 +425,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -462,7 +458,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC05REF0005</MsgId>
-      <CreDtTm>2026-09-04T09:14:56.255Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:05:06.438Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -536,7 +532,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -570,7 +565,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC06REF0006</MsgId>
-      <CreDtTm>2026-09-04T09:15:32.368Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:05:14.616Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -644,7 +639,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -679,7 +673,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC07REF0007</MsgId>
-      <CreDtTm>2026-09-04T09:17:01.597Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:05:22.112Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -761,7 +755,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -790,9 +783,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-Validation failed
-ValidationFailedException
-Validation failed after retries. Errors: [[VR001] If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange Rate must be present. - CdtTrfTxInf.XchgRate is required because CdtTrfTxInf.InstdAmt (Ccy=USD) differs from CdtTrfTxInf.IntrBkSttlmAmt (Ccy=GBP), but it is absent]
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR001] If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange Rate must be present. - CdtTrfTxInf.XchgRate is required because CdtTrfTxInf.InstdAmt (Ccy=USD) differs from CdtTrfTxInf.IntrBkSttlmAmt (Ccy=GBP), but it is absent]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR001] If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange Rate must be present. - CdtTrfTxInf.XchgRate is required because CdtTrfTxInf.InstdAmt (Ccy=USD) differs from CdtTrfTxInf.IntrBkSttlmAmt (Ccy=GBP), but it is absent"],"warnings":[]}}
 ```
 
 ---
@@ -820,78 +811,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC09REF0009</MsgId>
-      <CreDtTm>2026-09-04T09:19:57.352Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC09REF0009</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111119</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="GBP">1000.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>CRED</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>JOHN SMITH</Nm>
-        <PstlAdr>
-          <AdrLine>LONDON</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>11112222</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"ValidationFailedException","stage":"validate","message":"Validation failed after retries. Errors: [[VR020] Rule C14: if field 71A is BEN, at least one occurrence of field 71F is mandatory (error code E15). - source field '71A'=BEN requires source field '71F' to be present (at least one occurrence), but it is absent]","pipeline_steps":[{"key":"mapping","status":"done"},{"key":"parse","status":"done"},{"key":"convert","status":"done"},{"key":"validate","status":"error"}],"errors":["[VR020] Rule C14: if field 71A is BEN, at least one occurrence of field 71F is mandatory (error code E15). - source field '71A'=BEN requires source field '71F' to be present (at least one occurrence), but it is absent"],"warnings":[]}}
 ```
 
 ---
@@ -959,7 +879,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC11REF0011</MsgId>
-      <CreDtTm>2026-09-04T09:27:50.337Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:06:34.682Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1026,7 +946,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1060,7 +979,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC12REF0012</MsgId>
-      <CreDtTm>2026-09-04T09:30:08.708Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:06:42.548Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1128,7 +1047,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1162,7 +1080,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC13REF0013</MsgId>
-      <CreDtTm>2026-09-04T09:31:26.861Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:06:50.314Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1199,6 +1117,17 @@ MARY JONES
           <Ctry>US</Ctry>
           <AdrLine>5TH AVENUE 100</AdrLine>
         </PstlAdr>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>AB1234567</Id>
+              <SchmeNm>
+                <Prtry>CCPT</Prtry>
+              </SchmeNm>
+              <Issr>US</Issr>
+            </Othr>
+          </PrvtId>
+        </Id>
       </Dbtr>
       <DbtrAgt>
         <FinInstnId>
@@ -1223,7 +1152,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1258,7 +1186,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC14REF0014</MsgId>
-      <CreDtTm>2026-09-04T09:34:26.385Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:06:57.951Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1294,6 +1222,7 @@ MARY JONES
           <TwnNm>MUNICH</TwnNm>
           <Ctry>DE</Ctry>
           <AdrLine>INDUSTRIESTRASSE 45</AdrLine>
+          <AdrLine>GEBAUDE C, 3RD FLOOR</AdrLine>
         </PstlAdr>
       </Dbtr>
       <DbtrAcct>
@@ -1326,7 +1255,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1362,7 +1290,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC15REF0015</MsgId>
-      <CreDtTm>2026-09-04T09:35:45.034Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:07:05.590Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1399,6 +1327,15 @@ MARY JONES
           <Ctry>ES</Ctry>
           <AdrLine>CALLE MAYOR 5</AdrLine>
         </PstlAdr>
+        <Id>
+          <PrvtId>
+            <DtAndPlcOfBirth>
+              <BirthDt>1985-06-15</BirthDt>
+              <CityOfBirth>MADRID</CityOfBirth>
+              <CtryOfBirth>ES</CtryOfBirth>
+            </DtAndPlcOfBirth>
+          </PrvtId>
+        </Id>
       </Dbtr>
       <DbtrAcct>
         <Id>
@@ -1430,7 +1367,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1460,80 +1396,7 @@ MARY JONES
 
 **Your XML result:**
 ```
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr>
-      <MsgId>TC16REF0016</MsgId>
-      <CreDtTm>2026-09-04T09:37:08.314Z</CreDtTm>
-      <NbOfTxs>1</NbOfTxs>
-      <SttlmInf>
-        <SttlmMtd>INDA</SttlmMtd>
-      </SttlmInf>
-    </GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId>
-        <InstrId>TC16REF0016</InstrId>
-        <EndToEndId>NOTPROVIDED</EndToEndId>
-        <UETR>aaaaaaaa-1111-4111-8111-111111111126</UETR>
-      </PmtId>
-      <PmtTpInf>
-        <LclInstrm>
-          <Prtry>CRED</Prtry>
-        </LclInstrm>
-      </PmtTpInf>
-      <IntrBkSttlmAmt Ccy="EUR">1200.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
-      <ChrgBr>SHAR</ChrgBr>
-      <InstgAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </InstgAgt>
-      <InstdAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </InstdAgt>
-      <Dbtr>
-        <Nm>KLAUS WEBER</Nm>
-        <PstlAdr>
-          <TwnNm>VIENNA</TwnNm>
-          <Ctry>AT</Ctry>
-          <AdrLine>RINGSTRASSE 9</AdrLine>
-        </PstlAdr>
-      </Dbtr>
-      <DbtrAcct>
-        <Id>
-          <Othr>
-            <Id>56789012</Id>
-          </Othr>
-        </Id>
-      </DbtrAcct>
-      <DbtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB01XXX</BICFI>
-        </FinInstnId>
-      </DbtrAgt>
-      <CdtrAgt>
-        <FinInstnId>
-          <BICFI>TESTGB02XXX</BICFI>
-        </FinInstnId>
-      </CdtrAgt>
-      <Cdtr>
-        <Nm>MARY JONES</Nm>
-      </Cdtr>
-      <CdtrAcct>
-        <Id>
-          <Othr>
-            <Id>33334444</Id>
-          </Othr>
-        </Id>
-      </CdtrAcct>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>
-
+{"detail":{"error_type":"MappingDocIncompleteException","stage":"mapping","message":"Mapping document for 'MT103_TO_PACS008' is incomplete - refusing to guess.\nMissing/ambiguous items (2):\n  - XSD validation error: cvc-complex-type.2.4.b: The content of element 'DtAndPlcOfBirth' is not complete. One of '{\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\":PrvcOfBirth, \"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\":CityOfBirth}' is expected.\n  - [VR010] Field 50a numbers 4 (Date of Birth) and 5 (Place of Birth) must either both be present or both be absent. - CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt present=true but CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth present=false - these must either both be present or both be absent\n","pipeline_steps":[{"key":"mapping","status":"error"},{"key":"parse","status":"skipped"},{"key":"convert","status":"skipped"},{"key":"validate","status":"skipped"}],"missing":["XSD validation error: cvc-complex-type.2.4.b: The content of element 'DtAndPlcOfBirth' is not complete. One of '{\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\":PrvcOfBirth, \"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\":CityOfBirth}' is expected.","[VR010] Field 50a numbers 4 (Date of Birth) and 5 (Place of Birth) must either both be present or both be absent. - CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt present=true but CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth present=false - these must either both be present or both be absent"]}}
 ```
 
 ---
@@ -1562,12 +1425,12 @@ MARY JONES
 
 **Your XML result:**
 ```
-[paste here]<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC17REF0017</MsgId>
-      <CreDtTm>2026-09-04T09:38:08.345Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:07:19.499Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1656,7 +1519,77 @@ MARY JONES
 
 **Your XML result:**
 ```
-No mapping rule for source field '51A'. These source field(s) were found in the input but have no entry in field_mappings for conversion 'MT103_TO_PACS008'. Add explicit rules for them, or set unmapped_fields_policy to 'ignore' or 'passthrough' if that is truly intended.
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC18REF0018</MsgId>
+      <CreDtTm>2026-09-07T12:07:27.140Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC18REF0018</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111128</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="GBP">600.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
@@ -1691,7 +1624,7 @@ MARY JONES
   <FIToFICstmrCdtTrf>
     <GrpHdr>
       <MsgId>TC19REF0019</MsgId>
-      <CreDtTm>2026-09-04T09:43:16.185Z</CreDtTm>
+      <CreDtTm>2026-09-07T12:07:35.074Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
       <SttlmInf>
         <SttlmMtd>INDA</SttlmMtd>
@@ -1745,13 +1678,6 @@ MARY JONES
           </ClrSysMmbId>
         </FinInstnId>
       </DbtrAgt>
-      <DbtrAgtAcct>
-        <Id>
-          <Othr>
-            <Id>/SC123456</Id>
-          </Othr>
-        </Id>
-      </DbtrAgtAcct>
       <CdtrAgt>
         <FinInstnId>
           <BICFI>TESTGB02XXX</BICFI>
@@ -1770,7 +1696,6 @@ MARY JONES
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>
-
 ```
 
 ---
@@ -1802,7 +1727,82 @@ MARY JONES
 
 **Your XML result:**
 ```
-Validation failed after retries. Errors: [Mandatory target field 'CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI' (from source '__MT_SENDER_BIC__') is missing from the converted output.]
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TC20REF0020</MsgId>
+      <CreDtTm>2026-09-07T12:07:44.895Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TC20REF0020</InstrId>
+        <EndToEndId>NOTPROVIDED</EndToEndId>
+        <UETR>aaaaaaaa-1111-4111-8111-111111111130</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <LclInstrm>
+          <Prtry>CRED</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">900.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-03-15</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>TESTGB01XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>JOHN SMITH</Nm>
+        <PstlAdr>
+          <AdrLine>LONDON</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>11112222</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <Nm>FINANZBANK AG</Nm>
+          <PstlAdr>
+            <AdrLine>HAUPTSTRASSE 1</AdrLine>
+            <AdrLine>EISENSTADT</AdrLine>
+            <AdrLine>AUSTRIA</AdrLine>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>TESTGB02XXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>MARY JONES</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>33334444</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
 ```
 
 ---
