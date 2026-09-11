@@ -52,6 +52,9 @@ public class MappingDocument {
     private Map<String, Object> sourcesConsulted = new LinkedHashMap<>();
     private String importantLimitation;
 
+    /** Opt-in head.001 generation - see BusinessApplicationHeaderConfig's own Javadoc. Null (the default) means no AppHdr is produced. */
+    private BusinessApplicationHeaderConfig businessApplicationHeader;
+
     public String getConversionId() {
         return conversionId;
     }
@@ -194,5 +197,13 @@ public class MappingDocument {
 
     public void setImportantLimitation(String importantLimitation) {
         this.importantLimitation = importantLimitation;
+    }
+
+    public BusinessApplicationHeaderConfig getBusinessApplicationHeader() {
+        return businessApplicationHeader;
+    }
+
+    public void setBusinessApplicationHeader(BusinessApplicationHeaderConfig businessApplicationHeader) {
+        this.businessApplicationHeader = businessApplicationHeader;
     }
 }

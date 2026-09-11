@@ -146,6 +146,12 @@ export default function App() {
     }
   };
 
+  const handleCopyHeader = () => {
+    if (result?.business_application_header) {
+      navigator.clipboard.writeText(result.business_application_header);
+    }
+  };
+
   return (
     <div className="flex h-screen flex-col">
       {/* Header */}
@@ -248,6 +254,35 @@ export default function App() {
         failedStage={error?.stage}
         steps={status === "error" ? error?.pipelineSteps : result?.pipeline_steps}
       />
+
+      {/* Business Application Header (head.001) - only present for MT->MX conversions whose
+          mapping doc opts in (business_application_header.enabled). Shown as its own strip
+          rather than merged into the Document text below: the backend deliberately keeps these
+          as two independently-valid XML fragments (see BusinessApplicationHeaderConfig's own
+          Javadoc) since ISO 20022 doesn't define a single combining root for AppHdr+Document -
+          how you physically pair them for transport is your own gateway's convention. */}
+      {result?.business_application_header && (
+        <div className="border-b border-ledger-line bg-ledger-panel px-4 py-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-display font-semibold uppercase tracking-widest2 text-ledger-inkDim">
+              Business Application Header (head.001)
+            </span>
+            <button
+              onClick={handleCopyHeader}
+              className="text-[11px] uppercase tracking-widest2 text-ledger-inkDim hover:text-ledger-accent transition-colors"
+            >
+              Copy
+            </button>
+          </div>
+          <pre className="max-h-32 overflow-auto rounded border border-ledger-line bg-ledger-panelAlt p-2 text-[11px] leading-snug text-ledger-ink">
+            {result.business_application_header}
+          </pre>
+          <p className="mt-1 text-[10px] text-ledger-inkDim">
+            Sent alongside the Document below, not merged into it — ISO 20022 doesn't define one
+            fixed way to combine the two; pair them per your own gateway's transport convention.
+          </p>
+        </div>
+      )}
 
       {/* Panels */}
       <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-ledger-line md:grid-cols-2 md:divide-x md:divide-y-0">

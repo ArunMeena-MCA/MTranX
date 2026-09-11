@@ -17,6 +17,14 @@ public class ConversionResult {
     private List<Map<String, Object>> fieldTrace = new ArrayList<>();
     private List<Map<String, Object>> pipelineSteps = new ArrayList<>();
 
+    /**
+     * The ISO 20022 Business Application Header (head.001), when the mapping doc opts in via
+     * business_application_header - see BusinessApplicationHeaderConfig's Javadoc for why this is
+     * a separate field rather than merged into renderedOutput. Null when not configured for this
+     * conversion (e.g. every MX->MT conversion, and any MT->MX doc that hasn't opted in).
+     */
+    private String businessApplicationHeader;
+
     public String getSourceFormat() {
         return sourceFormat;
     }
@@ -103,5 +111,13 @@ public class ConversionResult {
 
     public void setPipelineSteps(List<Map<String, Object>> pipelineSteps) {
         this.pipelineSteps = pipelineSteps;
+    }
+
+    public String getBusinessApplicationHeader() {
+        return businessApplicationHeader;
+    }
+
+    public void setBusinessApplicationHeader(String businessApplicationHeader) {
+        this.businessApplicationHeader = businessApplicationHeader;
     }
 }

@@ -1,6 +1,7 @@
 package com.wiredesk.mtmx.orchestrate;
 
 import com.wiredesk.mtmx.config.AppProperties;
+import com.wiredesk.mtmx.convert.BusinessApplicationHeaderRenderer;
 import com.wiredesk.mtmx.convert.ConvertedMessage;
 import com.wiredesk.mtmx.convert.ConverterService;
 import com.wiredesk.mtmx.exception.MandatorySourceFieldMissingException;
@@ -46,6 +47,7 @@ public class ConversionOrchestrator {
     private final ConverterService converter;
     private final ValidatorService validator;
     private final AppProperties props;
+    private final BusinessApplicationHeaderRenderer bahRenderer;
 
     public ConversionOrchestrator(MappingRegistry registry,
                                    CompletenessAuditor auditor,
@@ -53,7 +55,8 @@ public class ConversionOrchestrator {
                                    MxParserService mxParser,
                                    ConverterService converter,
                                    ValidatorService validator,
-                                   AppProperties props) {
+                                   AppProperties props,
+                                   BusinessApplicationHeaderRenderer bahRenderer) {
         this.registry = registry;
         this.auditor = auditor;
         this.mtParser = mtParser;
@@ -61,6 +64,7 @@ public class ConversionOrchestrator {
         this.converter = converter;
         this.validator = validator;
         this.props = props;
+        this.bahRenderer = bahRenderer;
     }
 
     public ConversionResult convert(String rawText, String sourceFormat, String targetFormat) {
@@ -118,6 +122,14 @@ public class ConversionOrchestrator {
                 result.setAuditWarnings(audit.getWarnings());
                 result.setFieldTrace(converted.getFieldTrace());
                 result.setPipelineSteps(pipelineSteps(null));
+                // Opt-in, MT->MX only (an AppHdr wraps an MX Document, never an MT body) - see
+                // BusinessApplicationHeaderConfig's Javadoc for why this is rendered as its own
+                // separate field rather than merged into renderedOutput.
+                if (doc.getBusinessApplicationHeader() != null && doc.getBusinessApplicationHeader().isEnabled()
+                        && !targetFormat.toUpperCase().startsWith("MT")) {
+                    result.setBusinessApplicationHeader(
+                            bahRenderer.render(converted.getTree(), doc.getBusinessApplicationHeader(), targetFormat));
+                }
                 return result;
             }
 

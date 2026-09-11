@@ -10,6 +10,78 @@ not back into the YAML's `known_limitations` field.
 
 ```yaml
 known_limitations:
+- "v2.34 CHANGELOG NOTE (2026-09-10): CORRECTION to the v2.33 Business Application Header feature,
+  from a real worked CBPR+ example the user supplied directly (matched by its BizSvc=
+  swift.cbprplus.02 value to the same JPMorgan 'Migration to ISO 20022' worked example already
+  cited in this document's v2.9 history - treated as authoritative for that reason, not just taken
+  on faith). Two corrections: (1) namespace was wrongly head.001.001.02 - real CBPR+ output uses
+  head.001.001.01, corrected in BusinessApplicationHeaderRenderer. (2) AppHdr was rendered bare;
+  real output wraps it in <Envelope xmlns=\"urn:swift:xsd:envelope\" xmlns:xsi=\"...\"> - added,
+  applied unconditionally (not a new config toggle) since this whole feature is already an
+  opt-in, SWIFT/CBPR+-specific mechanism. Also added the optional BizSvc element
+  (swift.cbprplus.02), present in the real example and previously omitted. Deliberately NOT
+  extended to wrap the Document XML the same way - the correction was specifically about the
+  AppHdr's own shape, and Document is still validated as its own standalone root against the real
+  pacs.008 XSD elsewhere in this engine; wrapping it would break that."
+- "v2.33 CHANGELOG NOTE (2026-09-10): FEATURE, Business Application Header (head.001.001.02): resolves the
+  open question this document previously left undecided (MxRenderer only emitting <Document>, no head.001 -
+  'write down which case you're in'). New opt-in business_application_header YAML section + Java support
+  (BusinessApplicationHeaderConfig, BusinessApplicationHeaderRenderer, wired in ConversionOrchestrator) -
+  From/To reuse InstgAgt/InstdAgt (this message hop's Sender/Receiver BIC), BizMsgIdr reuses GrpHdr/MsgId,
+  CreDt reuses the same GrpHdr/CreDtTm the Document body carries. Returned as a SEPARATE field on the
+  conversion result (not merged into the Document XML): confirmed via research that ISO 20022 does not
+  define a single combining root element for AppHdr+Document - the one settled convention across real
+  integrations is only 'AppHdr and Document are sibling elements, AppHdr first', with the actual parent
+  wrapper being implementation/network-specific. Nesting Document inside an invented wrapper here would
+  also have broken this engine's existing real-XSD structural validation, which validates the Document XML
+  as its own standalone root - kept the two separate for exactly that reason, disclosed rather than
+  guessed at. MX->MT conversions and any mapping doc that doesn't declare this section are completely
+  unaffected (opt-in, defaults to absent)."
+- "v2.32 CHANGELOG NOTE (2026-09-08): BUG FIX, semantic-audit false positive reported live by the user
+  (conversion FAILED, not just warned, with a self-contradictory CONVERSION_ERROR claiming InstdAgt/CITIGB2LXXX
+  'conflicts with the DebtorAgent BIC/Sender BIC mapping' - the same InstgAgt/InstdAgt vs DbtrAgt/CdtrAgt
+  confusion this session had already diagnosed as a non-blocking false positive once before, except this time
+  the audit model assigned severity=error, which DOES fail the conversion, unlike a warning-severity finding).
+  Root-caused, not just re-explained: GeminiClient.describeRules()'s firstSentence() truncation (the same
+  mechanism already fixed once for field 71A's code_list, TC43) was cutting off BOTH the InstgAgt and InstdAgt
+  entries' notes before reaching their actual disambiguating rule statement - InstgAgt's note led with a
+  changelog-dated preamble ('v2.3 GAP FIX...InstgAgt/InstdAgt were previously entirely unmapped...') and only
+  reached 'InstgAgt/InstdAgt represent the agents at THIS specific interbank hop...distinct from DbtrAgt/CdtrAgt'
+  in its SECOND sentence, which firstSentence() never sees; InstdAgt's note compounded this by deferring its own
+  explanation to 'see the InstgAgt entry above' rather than restating it, so even that reference was blind.
+  Confirmed via direct simulation of firstSentence()'s exact truncation logic against both notes' actual text
+  before concluding this was the cause, not guessed. FIXED: both notes rewritten so the rule statement
+  ('InstgAgt/InstdAgt is DELIBERATELY DISTINCT from DbtrAgt/CdtrAgt...allowed to differ...NOT a conflict') now
+  leads as the first sentence, with all original changelog history preserved unchanged immediately after -
+  nothing deleted, only reordered. Re-verified against the live rebuilt backend with the user's own reported
+  scenario run repeatedly (semantic-audit output is non-deterministic, so a single pass proves nothing - see
+  this document's own TC125/TC140 precedent for why repeat verification matters here)."
+- "v2.31 CHANGELOG NOTE (2026-09-08): SR2026 READINESS PASS, triggered by the user asking to implement upcoming
+  14 Nov 2026 changes based on a pasted third-party summary. Independently researched via WebSearch/WebFetch
+  before implementing anything (this document's standing 'don't guess' discipline) and found the summary's own
+  premise was stale: SWIFT announced on 27 August 2026 a 'controlled extension' deferring ALL SR2026
+  payments-related changes indefinitely (confirmed against swift.com's own news post, corroborated independently
+  by RedCompass Labs and Fintech Garden) - SR2025 behavior continues to apply, with a revised timeline promised
+  'by December [2026] at the latest', no new date set. Given this, hard-enforcing any SR2026 rule now would
+  reject currently-valid SR2025 traffic for a requirement that isn't in force and may still change. User chose
+  (asked directly): non-blocking readiness warnings only, not hard rejection, not a full hold. ACTIONED: VR008
+  (structured address requirement) re-scoped from a date-gated HARD ERROR (effective_date: 2026-11-14, itself
+  now a real bug-in-waiting - it would have started rejecting valid traffic on that date regardless of the
+  deferral) to an always-on, non-blocking WARNING with the date gate removed entirely - no real replacement date
+  exists to gate on, and guessing one would repeat the mistake the deferral was meant to prevent. Also widened
+  VR008's scope to CdtTrfTxInf.IntrmyAgt1.FinInstnId.PstlAdr (field 56D populates this; was missing from the
+  rule's address_fields list entirely, an unrelated pre-existing gap found while re-verifying scope, not caused
+  by the SR2026 research itself). NOT IMPLEMENTED, each for a specific reason: (1) 50K/59(no-letter)/5xD-specific
+  hard-stop translation error codes (T20367/T20374/T20356/T20359/T20360) reported by a third-party consultancy -
+  this is the SAME underlying condition VR008 already checks (free-text address content with no structured
+  Town/Country), not a distinct mechanism, so no separate rule_type was built; also unverified against SWIFT's
+  own CBPR+ Mapping Library text (sits behind an authenticated MySwift login, not independently fetchable). (2)
+  InstdAmt-mandatory-even-same-currency, GPI service-level hard enforcement, and message-ID/BAH consistency
+  (the user's pasted summary cited these as CR3013/CR3020/CR3102 respectively) - all three CR numbers returned
+  ZERO corroboration from any source searched; not implemented against an unverifiable citation, consistent with
+  this document's treatment of every other unsourced claim throughout its history (e.g. VR016's citation
+  caveat, the 26T sourcing caution). Verified end-to-end against the actual rebuilt, running backend before
+  reporting done - see VR008's own updated logic field for the full source citations."
 - "v2.30 CHANGELOG NOTE (2026-09-08): DECISION (user's explicit call, not a guess): BIC-bound and UETR values now
   normalize case on parse rather than reject valid-content-wrong-case input outright - real MT senders are known
   to be inconsistent here even though the MT character set is conventionally uppercase. New mechanism: TransformationEngine.normalizeCase(value, mode) ('upper'/'lower', no-op otherwise), FieldMapping.normalizeCase (for

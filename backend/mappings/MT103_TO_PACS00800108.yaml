@@ -1,8 +1,8 @@
 conversion_id: MT103_TO_PACS008
 source_format: MT103
 target_format: pacs.008.001.08
-version: "2.30"
-last_updated: "2026-09-08"
+version: "2.34"
+last_updated: "2026-09-10"
 scope_notes: >
   SWIFT MT103 -> pacs.008.001.08 mapping profile.
 
@@ -910,6 +910,20 @@ field_mappings:
   transformation: direct_copy
   normalize_case: upper
   notes: >
+    RULE: InstgAgt is DELIBERATELY DISTINCT from DbtrAgt - InstgAgt is the agent at THIS specific interbank hop
+    (the MT header's actual Sender, Block 1), while DbtrAgt is the originating debtor's bank (from field 52a, or
+    its own separate Sender-fallback) - these two are ALLOWED to differ (e.g. a correspondent-relay scenario)
+    and having the same BIC value appear in only one of them, or different BIC values in each, is NOT a
+    conflict or dual-assignment error. v2.32 CHANGELOG (2026-09-08, semantic-audit false-positive, reported
+    live): a user-reported CONVERSION_ERROR ("InstdAgt conflicts with DebtorAgent BIC/Sender BIC mapping...")
+    was root-caused to GeminiClient.describeRules()'s firstSentence() truncation - this note previously LED
+    with a changelog-dated preamble ("v2.3 GAP FIX (real-message comparison, 2026-08-31): InstgAgt/InstdAgt were
+    previously entirely unmapped...") and only got to the actual InstgAgt-vs-DbtrAgt rule statement in the
+    SECOND sentence, which firstSentence() never reaches - the exact same bug class already fixed once for
+    field 71A's code_list (TC43) and generalized here: whichever sentence is first is ALL the semantic-audit
+    model ever sees, so the actual rule must lead every note, not the history of how it was discovered. Reordered
+    so the rule statement is now the first sentence; no information was deleted, only reordered - the full
+    original history follows below unchanged.
     v2.3 GAP FIX (real-message comparison, 2026-08-31): InstgAgt/InstdAgt
     were previously entirely unmapped - flagged as an open gap two rounds
     earlier in this session, which the user deferred answering at the
@@ -2527,6 +2541,14 @@ field_mappings:
   transformation: direct_copy
   normalize_case: upper
   notes: >
+    RULE: InstdAgt is DELIBERATELY DISTINCT from CdtrAgt - InstdAgt is the agent at THIS specific interbank hop
+    (the MT header's actual Receiver, Block 2), while CdtrAgt is the ultimate creditor's bank (from field 57a,
+    or its own separate Receiver-fallback) - these two are ALLOWED to differ (e.g. a correspondent-relay
+    scenario) and having the same BIC value appear in only one of them, or different BIC values in each, is
+    NOT a conflict or dual-assignment error. v2.32 CHANGELOG (2026-09-08): same semantic-audit firstSentence()
+    fix as the InstgAgt entry above (see its own v2.32 note for the full root-cause explanation) - this note
+    previously deferred its own explanation to "see its notes above" without restating the rule itself, so even
+    the referenced InstgAgt note's truncation left BOTH entries blind to this distinction; now self-contained.
     v2.3 GAP FIX: mirrors the InstgAgt/Sender entry above - see its notes
     for the InstgAgt/DbtrAgt distinction, which applies symmetrically
     here (InstdAgt = this message's Receiver; CdtrAgt = the ultimate
@@ -2994,6 +3016,37 @@ default_values: {}
 
 target_defaults:
   CdtTrfTxInf.PmtId.EndToEndId: NOTPROVIDED
+
+business_application_header:
+  enabled: true
+  from_target_path: "CdtTrfTxInf.InstgAgt.FinInstnId.BICFI"
+  to_target_path: "CdtTrfTxInf.InstdAgt.FinInstnId.BICFI"
+  biz_msg_idr_target_path: "GrpHdr.MsgId"
+  cre_dt_target_path: "GrpHdr.CreDtTm"
+  biz_svc: "swift.cbprplus.02"
+  # v2.33 ADDITION (2026-09-10, user request): produces a head.001 AppHdr alongside the
+  # Document, resolving the open question this document's own known_limitations previously left
+  # undecided ("MxRenderer only emits <Document> - no head.001 - write down which case you're in").
+  # From/To reuse InstgAgt/InstdAgt (the CURRENT message hop's Sender/Receiver BIC - see those
+  # entries' own v2.3 notes) rather than DbtrAgt/CdtrAgt, since AppHdr's Fr/To describe the two
+  # parties EXCHANGING THIS MESSAGE, not the ultimate debtor/creditor banks - the same distinction
+  # already established for InstgAgt/InstdAgt elsewhere in this document. BizMsgIdr reuses
+  # GrpHdr/MsgId (itself sourced from field 20) rather than inventing a second identifier.
+  # CreDt reuses the SAME GrpHdr/CreDtTm timestamp the Document itself carries, so the header and
+  # body never disagree on when the message was created. Returned as a SEPARATE field on the
+  # conversion result, not merged into the Document XML - see BusinessApplicationHeaderConfig's
+  # own Javadoc for why: ISO 20022 does not define a single combining root for AppHdr+Document
+  # (confirmed: real integrations agree only that "AppHdr and Document are sibling elements,
+  # AppHdr first" - the actual parent wrapper is implementation/network-specific), and nesting
+  # Document inside an invented wrapper would break this engine's existing real-XSD structural
+  # validation, which validates the Document XML as its own standalone root.
+  # v2.34 CORRECTION (2026-09-10, from a real worked CBPR+ example the user supplied): the
+  # namespace was wrongly head.001.001.02 (real CBPR+ output uses head.001.001.01) and AppHdr was
+  # rendered bare (real output wraps it in <Envelope xmlns="urn:swift:xsd:envelope">) - both fixed
+  # in BusinessApplicationHeaderRenderer, see its own v2.34 note for the full correction and why
+  # the supplied example is treated as authoritative (BizSvc=swift.cbprplus.02 matches the same
+  # JPMorgan worked example already cited elsewhere in this document's v2.9 history). biz_svc
+  # added here for the same reason - present in the real example, previously omitted.
 validation_rules:
 - rule_id: VR001
   description: "If Instructed Amount is present and its currency differs from the Interbank Settlement Amount currency, Exchange
@@ -3131,14 +3184,16 @@ validation_rules:
     fractional digits, not fewer-than-standard (a round amount like "100"
     for USD is legitimate).
 - rule_id: VR008
-  description: 'If 50F/59F or any D-option agent address is converted after 14 November 2026 for an in-scope Swift cross-border
-    flow, hybrid/structured address requirements must be satisfied: Town Name and Country Code must be structured.'
+  description: 'SR2026 CBPR+ readiness warning (non-blocking): a party/agent address carries free-text AdrLine content
+    with no structured Town Name and Country Code. This will become a hard rejection once SWIFT''s deferred SR2026
+    structured-address mandate actually takes effect - see this rule''s own logic for the current, unconfirmed timeline.'
   applies_to:
   - CdtTrfTxInf.Dbtr.PstlAdr
   - CdtTrfTxInf.Cdtr.PstlAdr
   - CdtTrfTxInf.DbtrAgt.FinInstnId.PstlAdr
   - CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr
-  severity: error
+  - CdtTrfTxInf.IntrmyAgt1.FinInstnId.PstlAdr
+  severity: warning
   rule_type: structured_address_required
   params:
     address_fields:
@@ -3146,21 +3201,33 @@ validation_rules:
       - CdtTrfTxInf.Cdtr.PstlAdr
       - CdtTrfTxInf.DbtrAgt.FinInstnId.PstlAdr
       - CdtTrfTxInf.CdtrAgt.FinInstnId.PstlAdr
-    effective_date: "2026-11-14"
+      - CdtTrfTxInf.IntrmyAgt1.FinInstnId.PstlAdr
   logic: >
-    Swift SR2026 address requirement; do not infer Town/Country from free
-    text without an explicit deterministic structuring rule. v2.2
-    CHANGELOG: now machine-checked via rule_type - flags a PstlAdr
-    populated with free-text AdrLine but no structured TwnNm/Ctry; does
-    NOT attempt to derive TwnNm/Ctry itself (still requires a real
-    structuring rule once one is sourced) - see
-    ValidatorService.evalStructuredAddress(). v2.4 BUG FIX: this rule's
-    own description says "if converted after 14 November 2026" - the
-    v2.2 implementation ignored that and enforced it unconditionally,
-    incorrectly failing conversions run months before its own stated
-    effective date. Added effective_date (ISO date) to params -
-    evalStructuredAddress() now skips the check entirely (not even a
-    warning - it isn't in effect yet) until the current date reaches it.
+    v2.31 CHANGELOG (2026-09-08): re-scoped from a date-gated HARD ERROR to an always-on, non-blocking WARNING,
+    directly in response to a real, verified development: SWIFT announced on 27 August 2026 (confirmed against
+    swift.com's own news post "Swift accepts community request to extend structured address migration for ISO
+    20022 payment messages", corroborated independently by RedCompass Labs and Fintech Garden) a "controlled
+    extension" deferring ALL SR2026 payments-related changes - not just this address requirement. SR2025 behavior
+    continues to apply; there is no confirmed new enforcement date as of this writing, only a promise that SWIFT
+    will publish a revised timeline "by December [2026] at the latest" after industry consultation. The
+    previous v2.4 fix (effective_date: "2026-11-14", removed here) would have started HARD-REJECTING valid
+    SR2025 traffic on that date regardless of SWIFT's own deferral - now known to be wrong, not just
+    theoretically risky. Removing the date gate entirely (rather than updating it to a new guessed date) is
+    deliberate: no real replacement date exists yet to gate on, and guessing one would repeat the exact mistake
+    the deferral was announced to prevent. This rule now fires unconditionally as a non-blocking warning so the
+    user has current visibility into which messages would be affected whenever enforcement actually begins,
+    without rejecting anything today. Scope also widened to cover IntrmyAgt1.FinInstnId.PstlAdr (field 56D
+    populates this and was previously missing from this rule entirely - an unrelated pre-existing gap found
+    while re-verifying this rule's scope, not something introduced by the SR2026 news itself). SEPARATELY
+    RESEARCHED, NOT IMPLEMENTED (no rule added - see known_limitations/CHANGELOG for full detail): field 50K/59
+    (no letter)/5xD-specific hard-stop translation error codes reported by a third-party consultancy (unverified
+    against SWIFT's own CBPR+ Mapping Library text, which sits behind an authenticated MySwift login) are the
+    SAME underlying condition this rule already checks (address content routed to free-text AdrLine with no
+    structured Town/Country) - not a separate mechanism, so no new rule_type was built for them. Three specific
+    change-request numbers a user-supplied summary cited (CR3013/CR3020/CR3102, covering InstdAmt-mandatory,
+    GPI service-level enforcement, and message-ID consistency) returned ZERO corroboration from any source
+    searched - not implemented, per this document's standing "don't guess, don't implement an unverifiable
+    citation" discipline.
 
 - rule_id: VR009
   description: "Field 71G (Receiver's Charges) amount must not equal zero, per SWIFT Network Validated Rule D57."

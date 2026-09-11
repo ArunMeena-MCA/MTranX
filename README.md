@@ -75,3 +75,13 @@ configuration template.
 See `backend/README.md` for configuration and `DOCUMENTATION.md` for the
 architecture writeup, and `backend/mappings/MAPPING_DOC_SPEC.md` for the
 mapping-document authoring guide.
+
+
+select * from pmtb_msg_dly_msg_out where media in ('SWIFT','FINPLUS') and swift_msg_type='103'
+
+column name is MESSAGE
+
+SWIFT --> MT
+FINPLUS --> MX
+
+SWIFT (MT) : module should be PX & media ='SWIFT'
