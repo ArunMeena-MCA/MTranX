@@ -77,7 +77,8 @@ architecture writeup, and `backend/mappings/MAPPING_DOC_SPEC.md` for the
 mapping-document authoring guide.
 
 
-select * from pmtb_msg_dly_msg_out where media in ('SWIFT','FINPLUS') and swift_msg_type='103'
+ 
+select * from pmtb_msg_dly_msg_out where media in ('SWIFT','FINPLUS') and swift_msg_type='103' and module = 'PX'
 
 column name is MESSAGE
 

@@ -19,6 +19,8 @@ export default {
           alarmDim: "#432019",
           accent: "#5B7FDE",
           accentDim: "#1E2A4D",
+          violet: "#8B5CF6",
+          cyan: "#22D3EE",
         },
       },
       fontFamily: {

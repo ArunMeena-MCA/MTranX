@@ -95,6 +95,28 @@ public class FieldMapping {
     private String gatePattern;
 
     /**
+     * The inverse of gatePattern: when set, this ENTIRE entry is skipped if
+     * the raw source value DOES match this regex somewhere (checked with the
+     * same MULTILINE find() semantics as gatePattern, right alongside it) -
+     * "run this entry only when this content is NOT present," rather than
+     * gatePattern's "only when it IS present."
+     *
+     * <p>Added (2026-09-15) specifically to make two entries sharing one
+     * source_field mutually exclusive by CONTENT shape rather than by
+     * target path: e.g. field 59's plain "first line = name" entry should
+     * step aside when the raw value actually contains Option-F-style
+     * numbered markers ("1/", "2/", "3/") - content that belongs to a
+     * different, more specific entry (see that entry's own gatePattern,
+     * which fires on the identical regex this one skips on). Without this,
+     * BOTH entries would fire for such a message and write conflicting
+     * values to the same target (last-write-wins, silently wrong) - the
+     * existing gatePattern alone cannot express "run unless X," only
+     * "run only if X," which is why this is a genuinely new mechanism
+     * rather than a parameter on the existing one.
+     */
+    private String antiGatePattern;
+
+    /**
      * Only used when transformation=settlement_datetime_from_time_offset.
      * The ALREADY-CONVERTED tree path (not a raw source field) to read a
      * date (ISODate, YYYY-MM-DD) from, to combine with this entry's own
@@ -300,6 +322,14 @@ public class FieldMapping {
 
     public void setGatePattern(String gatePattern) {
         this.gatePattern = gatePattern;
+    }
+
+    public String getAntiGatePattern() {
+        return antiGatePattern;
+    }
+
+    public void setAntiGatePattern(String antiGatePattern) {
+        this.antiGatePattern = antiGatePattern;
     }
 
     public String getDateFromTargetPath() {

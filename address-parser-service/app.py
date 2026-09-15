@@ -25,9 +25,26 @@ document this service supports - libpostal's own city/street output is
 NOT independently verified (there is no closed list of real cities to
 check against), so `confident` is a country-level signal only, not a
 blanket "trust every field" flag.
+
+REFINEMENT (deterministic, no LLM - by explicit user decision): libpostal's
+own "country" LABEL sometimes doesn't fire at all on unusual phrasing (e.g.
+a country name immediately followed by an unrelated second city, with no
+delimiter - "Chennai India New Delhi"), even though the country name is
+plainly present in the text. Rather than accepting that as an unrecoverable
+miss, this service ALSO scans the raw address text directly for a whole-word
+match against the same authoritative ISO 3166 name/alias list, independent
+of what libpostal did or didn't label. This is still a real, closed-list
+lookup - not a guess - and is tried only as a SECOND pass, after libpostal's
+own "country"-labeled component, which is more precise when it does fire
+(a labeled component is less likely to be a coincidental false positive than
+a bare substring match). See `_find_country_in_text` for the false-positive
+mitigation (longest-name-first, word-boundary matching) and its documented,
+irreducible limitation (a handful of country names collide with other real
+words, e.g. "Georgia" the country vs. the US state).
 """
 
 import logging
+import re
 from typing import List, Optional
 
 import pycountry
@@ -52,6 +69,50 @@ for _country in pycountry.countries:
         _COUNTRY_LOOKUP[_country.common_name.lower()] = _country.alpha_2
 logger.info("Loaded %d country name/alias -> ISO code entries", len(_COUNTRY_LOOKUP))
 
+# Longest-name-first, so a multi-word country name (e.g. "United Arab
+# Emirates") is tried before a shorter one that might otherwise partially
+# overlap it, and pre-compiled once at startup (not per-request) since this
+# scans every request. \b...\b word-boundary matching means "india" will NOT
+# match inside "indiana" (no boundary between the shared "india" prefix and
+# the following "n"), but it CANNOT distinguish a real country reference
+# from an unrelated identical word - e.g. "Georgia" (country) is spelled
+# identically to the US state of Georgia and to some real given names. This
+# is a genuine, irreducible ambiguity in the country name itself, not a bug
+# in the matching logic; it is the same ambiguity any parser (statistical,
+# rule-based, or LLM) faces for these specific names, not something specific
+# to this approach.
+_COUNTRY_NAMES_BY_LENGTH = sorted(_COUNTRY_LOOKUP.keys(), key=len, reverse=True)
+_COUNTRY_SCAN_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(name) for name in _COUNTRY_NAMES_BY_LENGTH) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _find_country_in_text(text: str) -> Optional[str]:
+    """Second-pass, whole-word scan of raw text against the ISO country list -
+    see the module docstring's REFINEMENT section for why this exists and its
+    documented limitation.
+
+    Verified (see the test that caught this before shipping): a naive
+    "return the first match" implementation silently picks the WRONG country
+    when a real US address mentions both a state that collides with a
+    country name and the actual country - e.g. "Atlanta, Georgia, United
+    States" contains both "Georgia" (-> GE) and "United States" (-> US) as
+    literal substrings; taking the first match would confidently return GE
+    for a US address. Since this service's whole design principle is "don't
+    guess, fail closed," multiple DISTINCT country codes found in the same
+    text is treated as genuinely ambiguous and returns None - the caller
+    then reports confident=false for country, exactly like "no country
+    found at all," rather than silently picking one of several candidates.
+    """
+    codes = {
+        _COUNTRY_LOOKUP[name.lower()]
+        for name in _COUNTRY_SCAN_PATTERN.findall(text)
+    }
+    if len(codes) == 1:
+        return next(iter(codes))
+    return None  # zero matches (nothing found) or 2+ distinct matches (ambiguous) - both are "don't guess" cases
+
 
 class ParseAddressRequest(BaseModel):
     lines: List[str]
@@ -63,6 +124,9 @@ class ParseAddressResponse(BaseModel):
     postcode: Optional[str] = None
     country_code: Optional[str] = None
     confident: bool = False
+    # Diagnostic only (the Java caller doesn't read this) - tells a human
+    # reviewer WHICH mechanism resolved the country, for auditability.
+    country_source: Optional[str] = None
 
 
 @app.get("/health")
@@ -95,14 +159,31 @@ def parse_address_endpoint(request: ParseAddressRequest):
     city = components.get("city")
     postcode = components.get("postcode")
 
+    # Pass 1 (preferred): libpostal's own "country"-labeled component. More
+    # precise than a bare text scan when it fires, since it's positionally
+    # informed, not just a substring match.
     raw_country = components.get("country")
     country_code = _COUNTRY_LOOKUP.get(raw_country.lower()) if raw_country else None
+    country_source = "libpostal_label" if country_code else None
 
-    # Confidence is gated ENTIRELY on the country cross-check - see the
-    # module docstring for why. A message with a real, recognized country
-    # but no city/street is still reported confident (whatever WAS
-    # extracted is trustworthy); a message where libpostal guessed a
-    # "country" that isn't a real country at all is not.
+    # Pass 2 (fallback): libpostal didn't label anything as "country" at
+    # all, or what it labeled didn't match a real country - scan the raw
+    # text directly. See _find_country_in_text and the module docstring's
+    # REFINEMENT section.
+    if country_code is None:
+        country_code = _find_country_in_text(address_text)
+        if country_code:
+            country_source = "raw_text_scan"
+            logger.info(
+                "Country recovered via raw-text scan (libpostal did not label it): %r -> %s",
+                address_text, country_code,
+            )
+
+    # Confidence is gated ENTIRELY on the country cross-check succeeding via
+    # EITHER pass - see the module docstring for why. A message with a real,
+    # recognized country but no city/street is still reported confident
+    # (whatever WAS extracted is trustworthy); a message where neither pass
+    # found a real country is not.
     confident = country_code is not None
 
     return ParseAddressResponse(
@@ -111,4 +192,5 @@ def parse_address_endpoint(request: ParseAddressRequest):
         postcode=postcode,
         country_code=country_code,
         confident=confident,
+        country_source=country_source,
     )

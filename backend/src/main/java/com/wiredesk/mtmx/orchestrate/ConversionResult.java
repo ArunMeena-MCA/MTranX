@@ -25,6 +25,16 @@ public class ConversionResult {
      */
     private String businessApplicationHeader;
 
+    /**
+     * The real, single-root {@code <Envelope>} combining businessApplicationHeader and
+     * renderedOutput - see BusinessApplicationHeaderRenderer.renderEnvelope()'s Javadoc. This is
+     * the actual transport-ready output when a head.001 header applies; renderedOutput/
+     * businessApplicationHeader remain available separately too (e.g. for validating the Document
+     * against its XSD as a standalone root). Null under the same conditions
+     * businessApplicationHeader is null.
+     */
+    private String envelopeOutput;
+
     public String getSourceFormat() {
         return sourceFormat;
     }
@@ -119,5 +129,13 @@ public class ConversionResult {
 
     public void setBusinessApplicationHeader(String businessApplicationHeader) {
         this.businessApplicationHeader = businessApplicationHeader;
+    }
+
+    public String getEnvelopeOutput() {
+        return envelopeOutput;
+    }
+
+    public void setEnvelopeOutput(String envelopeOutput) {
+        this.envelopeOutput = envelopeOutput;
     }
 }

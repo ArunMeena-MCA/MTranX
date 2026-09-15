@@ -89,6 +89,11 @@ public class GlobalExceptionHandler {
         return respond("upload", e, null, null, null);
     }
 
+    @ExceptionHandler(OracleFetchException.class)
+    public ResponseEntity<Map<String, Object>> handleOracleFetch(OracleFetchException e) {
+        return respond("fetch", e, null, null, null);
+    }
+
     @ExceptionHandler(MtmxException.class)
     public ResponseEntity<Map<String, Object>> handleGenericEngine(MtmxException e) {
         return respond("unknown", e, null, null, null);

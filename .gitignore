@@ -1,4 +1,5 @@
 backend/.env
+backend/sample/
 target/
 backend/tests-fixtures
 frontend/node_modules/

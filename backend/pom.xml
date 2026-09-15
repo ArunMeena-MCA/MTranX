@@ -67,6 +67,17 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!--
+          Oracle JDBC thin driver - used by automation/OracleMessageFetchService to pull raw
+          MT103 messages from pmtb_msg_dly_msg_out for the automated dashboard. Version confirmed
+          on Maven Central (2026-09-10) as the current release compatible with JDK 17.
+        -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc11</artifactId>
+            <version>23.26.3.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>

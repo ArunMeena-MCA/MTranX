@@ -3,6 +3,7 @@ import MessagePanel from "./components/MessagePanel.jsx";
 import PipelineStatus from "./components/PipelineStatus.jsx";
 import DiagnosticsPanel from "./components/DiagnosticsPanel.jsx";
 import UploadMappingPanel from "./components/UploadMappingPanel.jsx";
+import AutomatedDashboard from "./components/AutomatedDashboard.jsx";
 import { fetchMappings, convertMessage } from "./lib/api.js";
 import { SAMPLE_MT103 } from "./lib/samples.js";
 import { detectSourceFormat, isMtFormat } from "./lib/detectFormat.js";
@@ -14,7 +15,7 @@ const FALLBACK_MAPPINGS = [
 export default function App() {
   const [mappings, setMappings] = useState(FALLBACK_MAPPINGS);
   const [engineOnline, setEngineOnline] = useState(null); // null = checking, true/false after
-  const [view, setView] = useState("convert"); // convert | upload
+  const [view, setView] = useState("convert"); // convert | upload | automated
   const [convertDirection, setConvertDirection] = useState("MT_TO_MX"); // MT_TO_MX | MX_TO_MT
 
   const [sourceFormat, setSourceFormat] = useState("MT103");
@@ -182,6 +183,15 @@ export default function App() {
             >
               Upload mapping
             </button>
+            <button
+              onClick={() => setView("automated")}
+              className={[
+                "rounded px-2 py-1 text-[11px] uppercase tracking-widest2 transition-colors",
+                view === "automated" ? "text-ledger-accent" : "text-ledger-inkDim hover:text-ledger-ink",
+              ].join(" ")}
+            >
+              Automation
+            </button>
           </nav>
         </div>
         <div className="flex items-center gap-2">
@@ -203,6 +213,8 @@ export default function App() {
 
       {view === "upload" ? (
         <UploadMappingPanel onUploaded={handleMappingUploaded} />
+      ) : view === "automated" ? (
+        <AutomatedDashboard />
       ) : (
         <>
       {/* Controls */}

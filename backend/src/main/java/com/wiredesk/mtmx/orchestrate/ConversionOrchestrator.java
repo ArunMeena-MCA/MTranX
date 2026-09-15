@@ -122,13 +122,18 @@ public class ConversionOrchestrator {
                 result.setAuditWarnings(audit.getWarnings());
                 result.setFieldTrace(converted.getFieldTrace());
                 result.setPipelineSteps(pipelineSteps(null));
-                // Opt-in, MT->MX only (an AppHdr wraps an MX Document, never an MT body) - see
-                // BusinessApplicationHeaderConfig's Javadoc for why this is rendered as its own
-                // separate field rather than merged into renderedOutput.
+                // Opt-in, MT->MX only (an AppHdr wraps an MX Document, never an MT body). render()
+                // still produces the standalone AppHdr fragment (kept - independently useful, e.g.
+                // for inspection); renderEnvelope() then composes it with the ALREADY-VALIDATED
+                // Document (converted.getRenderedText(), validated above as its own standalone XSD
+                // root - unaffected by this step) into the real, single-root <Envelope> transport
+                // output - see BusinessApplicationHeaderRenderer's own v2.35 note for why this
+                // replaced the earlier "keep them as two separate strings" design.
                 if (doc.getBusinessApplicationHeader() != null && doc.getBusinessApplicationHeader().isEnabled()
                         && !targetFormat.toUpperCase().startsWith("MT")) {
-                    result.setBusinessApplicationHeader(
-                            bahRenderer.render(converted.getTree(), doc.getBusinessApplicationHeader(), targetFormat));
+                    String appHdr = bahRenderer.render(converted.getTree(), doc.getBusinessApplicationHeader(), targetFormat);
+                    result.setBusinessApplicationHeader(appHdr);
+                    result.setEnvelopeOutput(bahRenderer.renderEnvelope(appHdr, converted.getRenderedText()));
                 }
                 return result;
             }

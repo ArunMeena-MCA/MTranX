@@ -36,7 +36,10 @@ FROM python:3.11-slim
 COPY --from=libpostal-builder /usr/local/lib/libpostal* /usr/local/lib/
 COPY --from=libpostal-builder /usr/local/include/libpostal /usr/local/include/libpostal
 COPY --from=libpostal-builder /opt/libpostal_data /opt/libpostal_data
-RUN ldconfig
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && ldconfig
 
 WORKDIR /app
 COPY requirements.txt .

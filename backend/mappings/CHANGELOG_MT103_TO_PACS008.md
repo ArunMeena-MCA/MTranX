@@ -10,6 +10,189 @@ not back into the YAML's `known_limitations` field.
 
 ```yaml
 known_limitations:
+- "v2.41 BUG FIX + DISCLOSED LIMITATION (2026-09-15, from the user re-checking v2.40's own output on the exact
+  ZZZ CORPRATION and Colmore Row messages): two findings from that recheck, one fixed, one confirmed as
+  expected/correct SWIFT-format behavior rather than a bug. (1) FIXED - city/country silently missing for the
+  numbered-line 50K/59 variants when no '3/XX/City' line is present: those entries' structured_address.targets
+  deliberately excluded city/country (v2.39/v2.40) to avoid overwriting the entry's OWN deterministic '3/'-line
+  Ctry/TwnNm extraction - but the real ZZZ CORPRATION message has NO '3/' line at all, so Cdtr's TwnNm/Ctry were
+  never set by ANY path, even though a direct sidecar test confirms libpostal DOES return city='dallas' for
+  the exact two address lines in that message ('CENTER 350 N,' / 'ST PAUL, SUITE 1300, DALLAS,'). Root-caused
+  and fixed properly, not just patched: ConverterService.putIfPresent (used only by the structured_address
+  enrichment step) now refuses to overwrite a target path that already has a value, so city/country are safe
+  to re-add to both entries' targets - the deterministic 3/-line result (when present) always wins, the
+  sidecar only fills the gap when there is one. Verified: the ZZZ CORPRATION message now gets
+  Cdtr.PstlAdr.TwnNm='dallas' alongside the existing AdrLine/StrtNm, and a constructed message that DOES have
+  a real '3/XX/City' line still shows the deterministic value, confirming no overwrite regression. (2) NOT A
+  BUG, DISCLOSED - Colmore Row message (':50K:/00000787\n27 Colmore Row\nBirmingham\nEngland') produces
+  Dbtr.Nm='27 Colmore Row', which reads oddly since that line is clearly a street address, not a name. This is
+  the direct, correct consequence of the USER-PROVIDED RULE from 2026-08-31 that plain 50K's first non-account
+  line is ALWAYS the Name (SWIFT Option K carries undifferentiated 'Name and Address' lines with no marker
+  distinguishing them - positional convention, not a per-message judgment call). This message appears to omit
+  an actual name and start directly with the address, which is unusual, real-world messy sender data - not a
+  parsing defect. Deliberately NOT changed: detecting 'line 0 looks like an address, not a name' would require
+  guessing from content shape (e.g. leading house number) rather than reading an explicit structural signal,
+  which is exactly the kind of low-confidence inference the standing 'don't guess' instruction rules out - a
+  string like '3M Corporation' or '7-Eleven Inc' also starts with a digit and IS a legitimate name, so this
+  can't be resolved with genuine confidence from the shape of the text alone. Left as-is and disclosed here
+  rather than silently reinterpreted."
+- "v2.40 CHANGELOG NOTE (2026-09-15, user-requested: 'wherever it understands with confidence... act
+  intelligently, but don't act on low confidence'). Two improvements, both deliberately narrow ('only when
+  genuinely unambiguous', never a position or pattern GUESS): (1) AdrLine/structured-field DEDUP: once
+  libpostal confidently resolves street/city for 50K/bare-59, any AdrLine occurrence that is an EXACT
+  (case-insensitive, whole-line) duplicate of that street or city is now removed as genuinely redundant -
+  e.g. AdrLine=['Street','Chennai','India New Delhi'] resolving StrtNm=street/TwnNm=chennai now keeps only
+  AdrLine=['India New Delhi']. New StructuredAddressRule.adrLineTargetPath (opt-in, only set on plain 50K/59 -
+  50F/59F/the numbered-line variants are untouched, they extract Ctry/TwnNm deterministically, not via this
+  sidecar). Partial/substring matches are NEVER removed - 'India New Delhi' stays intact even though it
+  contains 'India', since Ctry=IN came from a raw-text substring scan, not a match to the whole line, and
+  stripping it would discard 'New Delhi' with nowhere else for that content to go. (2) AdrLine broadened for
+  the numbered-line 50K/59 variants (v2.39): previously ONLY captured lines explicitly starting with '2/' -
+  the exact live message that motivated the whole v2.39 entry ('1/ZZZ CORPRATION\nCENTER 350 N,\nST PAUL,
+  SUITE 1300, DALLAS,') has its address on UNMARKED trailing lines, which matched nothing and were silently
+  dropped completely - a real, previously-unnoticed data-loss gap on top of the Nm fix v2.39 already made.
+  Regex broadened to capture any line not claimed by another recognized marker, mirroring the SAME 'unmarked
+  content is address text' rule the plain 50K/59 entries already apply universally - not a new heuristic, an
+  extension of an already-trusted one. Deliberately still excludes PURELY NUMERIC lines (e.g. the same
+  message's own '000005632' account line, still missing its required leading '/') - a bare number is at least
+  as plausibly an unmarked account as address text, and this document does not guess between the two; it stays
+  uncaptured, per the DISCLOSED SIDE EFFECT already logged in v2.39, rather than being placed into either
+  field on a guess. SELF-CAUGHT REGRESSION, fixed before shipping: pre-verification against a constructed
+  '50K:/00099887\n1/NAME\n2/Street\n3/GB/City' case (leading account line WITH its required '/', unlike the
+  ZZZ CORPRATION message's unmarked '000005632') showed the broadened AdrLine regex also re-capturing that
+  account line as bogus address text, because strip_account_line_prefix strips it via a line-index pass that
+  a `regex:`-type sub_element (matching the full raw field value directly) doesn't go through - the account
+  digits then got fed into the libpostal sidecar alongside the real street line and produced a garbled StrtNm.
+  Fixed by adding `(?!\\A/)` to both the 50K-numbered and 59-numbered AdrLine regexes (matches
+  strip_account_line_prefix's own exact scope: only the field's very first line, only if it starts with '/').
+  Verified end-to-end after this fix: the exact reported ZZZ CORPRATION message now produces Cdtr with both Nm
+  and the full address (previously address-only-blank), the Chennai/India message now shows the deduped 2-line
+  AdrLine set alongside StrtNm/TwnNm/Ctry, a constructed 50K message with a real '/account' line plus numbered
+  content produces a clean AccountId/Nm/AdrLine/StrtNm/TwnNm/Ctry split with no duplication or garbling, and a
+  message with NO duplication/no numbered markers is unaffected."
+- "OPERATIONAL NOTE (2026-09-15, no version bump - no YAML or Java changed): a live conversion (the exact
+  'ABC Street, Chennai, India New Delhi' shape v2.37's own changelog entry claimed was tested and fixed) came
+  back with StrtNm/TwnNm populated but Ctry missing - i.e. the v2.37 fix APPEARED not to be in effect. Root
+  cause: the address-parser-service Docker container was still running the image built BEFORE that fix was
+  written to app.py - `COPY app.py .` bakes the file in at build time, so editing the source file on disk does
+  nothing to an already-running container. The fix was real and correct (confirmed: rebuilding the image picked
+  it up immediately, using entirely cached layers except the one-line COPY, so the rebuild took seconds, not
+  the original build's ~2GB/several-minute cost) - this was a deployment gap, not a code defect, and it could
+  have been caught earlier by testing against the actual running container instead of only the source file.
+  Rebuilt and recreated the container; re-verified the exact reported message end-to-end (Ctry=IN now populates
+  correctly) directly against the user's own already-running backend, with no backend restart needed - this was
+  purely a sidecar-container fix. Added an explicit rebuild-and-recreate reminder to address-parser-service/
+  README.md so this doesn't recur silently again, and corrected that same README's own wrong example
+  (MTMX_ADDRESS_PARSER_URL=http://address-parser:8090/...) - a docker-compose-only hostname shown as if it were
+  the default for the plain `docker run` setup the README's own 'Option A' describes, the identical mismatch
+  already found and fixed once in this project's real .env."
+- "v2.39 CHANGELOG NOTE, PART 2 (2026-09-15): PROACTIVE SWEEP, semantic-audit 'notes bury the rule' blind spot -
+  the same defect class fixed reactively three times before (InstgAgt/InstdAgt, then DbtrAgt/CdtrAgt), this time
+  swept systematically across the whole document instead of waiting for a fourth live report. Method: scripted
+  GeminiClient.describeRules()'s own firstSentence() truncation against every entry's notes, flagged 37 of 82
+  entries whose first sentence starts with a version/changelog marker (v2.X BUG FIX/ADDITION/etc.), then narrowed
+  to the 13 where that first sentence is PURELY a cross-reference ('paired with X above', 'see Y's notes') with
+  ZERO standalone content - the exact shape that produced zero audit context in the three prior incidents.
+  ASSESSED, NOT JUST FIXED: each of the 13 was individually checked against the SPECIFIC risk pattern that
+  actually caused those three incidents (two independently-sourced fields whose VALUES can coincidentally
+  match, read by the audit as duplication/conflict) - none of the 13 share that shape; all are either two
+  sub-parts of one composite source value (currency+amount pairs, clearing-code MmbId+Cd pairs, 77B's two
+  halves) or sibling entries keyed to different, mutually exclusive codewords (13C's six time codes). Lower risk
+  than the confirmed pattern, but the SAME underlying mechanical defect (real content past sentence 1, invisible
+  to the audit) - fixed anyway since the fix is purely additive (a short RULE: sentence prepended, zero content
+  removed) and mechanically cheap. All 13 re-verified via the same firstSentence() script to confirm each now
+  leads with RULE:, and the full document re-verified end-to-end afterward (the v2.39 Part 1 message plus a
+  fully ordinary message) to confirm no regression from touching 13 unrelated entries' notes in one pass."
+- "v2.39 CHANGELOG NOTE (2026-09-15): FEATURE, Option-F-numbered-line detection inside plain 50K/59. Real message
+  reported by the user: field 59 content '000005632\n1/ZZZ CORPRATION\nCENTER 350 N,\n...' was taken literally by
+  the plain-59 entry's 'first line = name' rule, producing Cdtr/Nm='000005632' (the account number) while the
+  numbered '1/ZZZ CORPRATION' line - unmistakably Option-F-style Name syntax - was mis-read as free-text address
+  content. New mechanism: FieldMapping.antiGatePattern (ConverterService), the inverse of the existing
+  gatePattern - 'skip this entry if the raw value DOES match X,' where gatePattern only ever expressed 'run only
+  if X.' Wired as two new mutually-exclusive-by-content entries per field: the existing plain 50K/59 entries now
+  carry anti_gate_pattern: matching a numbered-line marker (so they step aside when one is present), and two new
+  entries (gated on the SAME regex, positively) reuse 50F's/59F's own already-sourced, already-tested numbered-
+  line decomposition verbatim - not new parsing logic, just applying proven logic to content that happens to
+  arrive under the wrong tag. Deliberately NOT a position-based or address-pattern-based guess: an explicit
+  '1/'/'2/'/'3/' marker is content the sender chose to write, not an inference this engine is making about what a
+  line probably means. Symmetric fix applied to 50K proactively (no live 50K report of this exact bug, but the
+  identical risk exists there by construction) as well as the reported 59 case. Verified: the reported message
+  now correctly extracts Cdtr/Nm='ZZZ CORPRATION' (via the new entry); regression-checked that ordinary plain
+  50K/59 content (no numbered markers) is completely unaffected - the anti_gate_pattern only excludes content
+  that actually contains the marker, and every other field_mappings entry in this document is untouched.
+  DISCLOSED SIDE EFFECT, found during this same verification, not hidden: the reported message's account line
+  ('000005632', no leading '/') is a SEPARATE, pre-existing malformation - SWIFT's own account subfield syntax
+  requires the leading slash - and the new entry's sub_elements all key off explicit 'N/' markers, so a line
+  matching neither the account pattern nor any numbered marker is now captured NOWHERE (silently absent from
+  output), where the OLD entry would at least have placed it, wrongly, into Nm. Confirmed NOT a regression of
+  the new mechanism itself: a second test message with a PROPERLY slash-prefixed account plus numbered content
+  (':50K:/00099887\n1/BOBS BURGERS LTD\n2/45 High Street\n3/GB/London') correctly produced DbtrAcct=00099887,
+  Nm='BOBS BURGERS LTD', full structured address - every field captured correctly. The account-number loss is
+  therefore narrowly scoped to messages combining BOTH anomalies (missing account slash AND numbered-line
+  content) at once - not fixed here, since inventing an account value for a non-conformant line would be
+  exactly the guessing this document avoids; flagged for the user's awareness rather than silently accepted."
+- "v2.38 CHANGELOG NOTE (2026-09-15): FEATURE ACTIVATION - the structured-address enrichment work from
+  v2.37 was written and unit-verified but never actually run end-to-end against the live Java pipeline +
+  real libpostal sidecar; doing that surfaced two real, previously-invisible bugs, both fixed. (1) The
+  user's own backend/.env had MTMX_ADDRESS_PARSER_ENABLED=true but MTMX_ADDRESS_PARSER_URL pointed at
+  'http://address-parser:8090' - a Docker-compose-internal hostname that only resolves for a container on
+  the same docker network, not from the plain Windows JVM process this backend actually runs as. Corrected
+  to http://localhost:8090 (the sidecar's host-exposed port, confirmed via `docker ps`) - the feature was
+  silently non-functional (always failing soft to AdrLine-only) despite being 'enabled' the whole time. (2)
+  BUG FIX, AddressParserClient: java.net.http.HttpClient defaults to preferring HTTP/2, sending an
+  'Upgrade: h2c' header on its first request; uvicorn (the sidecar's ASGI server, HTTP/1.1 only) doesn't
+  reject this cleanly and corrupts the request body before Pydantic validates it - every single call was
+  failing with 422 Unprocessable Entity, confirmed via docker logs, even though the exact same JSON body
+  worked fine over a plain curl request. Fixed by forcing HttpClient.Version.HTTP_1_1 explicitly. CAUGHT
+  BEFORE SHIPPING (process note, not a fix): a third change was drafted in this same pass - re-gating
+  street/city/postcode behind the SAME confidence flag as country, having seen TwnNm populate alone
+  without Ctry on a real message (Birmingham/England) and mistaking that for a bug. It is not a bug - it is
+  EXACTLY what v2.37's own changelog entry already fixed away from, for a directly-cited reason (Chennai/
+  India). Caught by reading that changelog entry before treating the 'fix' as final, and reverted before
+  it was ever left in place - see v2.37's own entry for why independent per-field gating is correct.
+  Verified end-to-end after both real fixes: a confident case (clear country names) now populates StrtNm/
+  TwnNm/Ctry correctly; the Birmingham/England case populates TwnNm only (no Ctry, matching v2.37's
+  documented behavior); VR008's readiness warning still fires correctly in the no-country case."
+- "v2.37 CHANGELOG NOTE (2026-09-15): structured-address enrichment (StrtNm/TwnNm/PstCd/Ctry from 50K/59's free-text
+  AdrLine, via the libpostal sidecar - see address-parser-service/) got two real fixes after live testing against
+  the user's own hard address samples, and a deliberate DECISION to keep this deterministic rather than add an LLM
+  layer. (1) BUG FIX, per-field gating: ConverterService.enrichWithStructuredAddress previously gated street/city/
+  postcode behind the SAME confidence flag as country, so a correctly-extracted city/street was discarded whenever
+  country alone couldn't be resolved - confirmed by a real test: input '/000000067103, ABC Street, Chennai, India
+  New Delhi' correctly extracted street='abc street' and city='chennai' but both were thrown away because country
+  came back unconfident. street/city/postcode now populate independently whenever libpostal returns them; only
+  country still requires BOTH libpostal's own confidence flag AND an independent match against a real ISO 3166
+  list (via Locale.getISOCountries(), no new Java dependency). (2) DECISION (user-directed): an LLM-fallback tier
+  was drafted (GeminiClient.resolveAddressComponents, an address-llm-fallback-enabled flag) after the country miss
+  above, reasoning that country names are a small closed set an LLM has memorized reliably - but the user explicitly
+  asked to keep this deterministic for now, so that code was written, then fully reverted (not left disabled -
+  removed) rather than shipped dormant. (3) REFINEMENT INSTEAD (deterministic, verified before shipping): app.py's
+  country resolution was too narrow - it only trusted libpostal's own 'country'-LABELED component, so unusual
+  phrasing where libpostal never applies that label at all (exactly the 'India New Delhi' case) had no recovery
+  path. Added a second-pass raw-text scan against the SAME authoritative pycountry-derived ISO name/alias list,
+  word-boundary matched (so 'india' does not match inside 'indiana') and independently tested against all 5 of the
+  user's original hard cases - all 5 now correctly resolve country=IN, verified by direct script execution before
+  writing this note, not assumed. A second real risk was found and fixed DURING that same testing, not assumed
+  away: a naive 'first match wins' version of this scan would silently return the WRONG country for a real address
+  like 'Atlanta, Georgia, United States' (both 'Georgia'->GE and 'United States'->US appear as literal substrings) -
+  fixed to require the raw-text scan find EXACTLY ONE distinct ISO code in the text; two or more distinct matches is
+  now treated as genuinely ambiguous (confident=false), not guessed. Both the original 5 cases and this ambiguity
+  case were re-verified together after that fix. libpostal's own country-name/state-name collisions (Georgia being
+  the clearest example) remain a documented, irreducible limitation of country-name matching itself - not something
+  any parsing method (statistical, rule-based, or LLM) can fully resolve from the country name string alone."
+- "v2.36 CHANGELOG NOTE (2026-09-11): BUG FIX, semantic-audit false positive - completed a fix left half-done in
+  v2.32. That earlier fix rewrote the InstgAgt/InstdAgt entries' notes so the audit sees the 'these are
+  DELIBERATELY DISTINCT from DbtrAgt/CdtrAgt, not a conflict' rule as the first sentence (firstSentence()
+  truncation only ever sends the audit one sentence). It did NOT rewrite the DbtrAgt/CdtrAgt fallback entries'
+  OWN notes (__MT_SENDER_BIC__->DbtrAgt, __MT_RECEIVER_BIC__->CdtrAgt) - both still led with unrelated
+  changelog/citation-correction history ('v2.1 CITATION FIX...', 'v2.1 CRITICAL CORRECTION...'), leaving the
+  audit with clear rule text for ONE half of the pair but not the other. This is confirmed to be exactly why the
+  audit kept confusing this specific pairing and no other: a user-reported live conversion failed 2 of 3 attempts
+  on this exact InstdAgt/CdtrAgt confusion (auto-retry eventually succeeded on attempt 3, but that's masking the
+  underlying blind spot, not fixing it). Both entries' notes reordered the same way as v2.32's - rule statement
+  now leads, full original history preserved unchanged below it. Not verified as fully resolved given the
+  audit's inherent non-determinism (same caveat as every other fix in this category) - but the specific,
+  confirmed gap (asymmetric rule visibility between the two halves of this pairing) is now closed."
 - "v2.34 CHANGELOG NOTE (2026-09-10): CORRECTION to the v2.33 Business Application Header feature,
   from a real worked CBPR+ example the user supplied directly (matched by its BizSvc=
   swift.cbprplus.02 value to the same JPMorgan 'Migration to ISO 20022' worked example already

@@ -2,6 +2,7 @@ package com.wiredesk.mtmx.convert;
 
 import com.wiredesk.mtmx.address.AddressParserClient;
 import com.wiredesk.mtmx.address.ParsedAddress;
+import com.wiredesk.mtmx.config.AppProperties;
 import com.wiredesk.mtmx.exception.TransformationException;
 import com.wiredesk.mtmx.exception.UnmappableFieldException;
 import com.wiredesk.mtmx.llm.GeminiClient;
@@ -37,19 +38,32 @@ public class ConverterService {
     private final MtRenderer mtRenderer;
     private final MxRenderer mxRenderer;
     private final AddressParserClient addressParserClient;
+    private final AppProperties props;
+
+    /**
+     * Real, current ISO 3166-1 alpha-2 codes, from the JVM's own built-in
+     * locale data - no new dependency, and no hand-maintained list to drift
+     * out of date. Used to independently verify a country_code BEFORE
+     * writing it to Ctry, from EITHER the libpostal sidecar or the LLM
+     * fallback - neither one's own self-reported confidence is trusted
+     * alone. See enrichWithStructuredAddress.
+     */
+    private static final Set<String> ISO_COUNTRY_CODES = Set.of(java.util.Locale.getISOCountries());
 
     public ConverterService(TransformationEngine engine,
                              DecompositionService decompositionService,
                              GeminiClient llmClient,
                              MtRenderer mtRenderer,
                              MxRenderer mxRenderer,
-                             AddressParserClient addressParserClient) {
+                             AddressParserClient addressParserClient,
+                             AppProperties props) {
         this.engine = engine;
         this.decompositionService = decompositionService;
         this.llmClient = llmClient;
         this.mtRenderer = mtRenderer;
         this.mxRenderer = mxRenderer;
         this.addressParserClient = addressParserClient;
+        this.props = props;
     }
 
     public ConvertedMessage convert(ParsedMessage parsed, MappingDocument doc) {
@@ -121,6 +135,13 @@ public class ConverterService {
             // exact same class of whole-conversion failure via a different code path).
             if (fm.getGatePattern() != null
                     && !java.util.regex.Pattern.compile(fm.getGatePattern(), java.util.regex.Pattern.MULTILINE)
+                            .matcher(rawValue).find()) {
+                continue;
+            }
+            // The inverse of the check above - see FieldMapping.antiGatePattern's Javadoc for why
+            // this is a genuinely separate mechanism (gatePattern alone can't express "run unless").
+            if (fm.getAntiGatePattern() != null
+                    && java.util.regex.Pattern.compile(fm.getAntiGatePattern(), java.util.regex.Pattern.MULTILINE)
                             .matcher(rawValue).find()) {
                 continue;
             }
@@ -519,16 +540,26 @@ public class ConverterService {
 
     /**
      * Opt-in structured-address enrichment (see StructuredAddressRule's
-     * Javadoc). No-op if the entry doesn't request it, if
-     * mtmx.address-parser-enabled=false, or if the sidecar call didn't come
-     * back confident - in every one of those cases the tree already has the
-     * normal AdrLine writes from the loop above, so skipping here never
+     * Javadoc), via libpostal ONLY - no LLM involved (deliberately, per
+     * user decision: keep this deterministic, no address text sent to any
+     * LLM provider). No-op if the entry doesn't request it or if
+     * mtmx.address-parser-enabled=false - in that case the tree already has
+     * the normal AdrLine writes from the loop above, so skipping here never
      * loses data, it just means this message doesn't ALSO get the
      * structured fields.
+     *
+     * <p>street/city/postcode are written WHENEVER libpostal returns them,
+     * regardless of its country confidence - the original v2.14 version
+     * gated ALL FOUR fields behind one confidence flag, which meant a
+     * correctly-extracted city/street was discarded just because country
+     * couldn't be resolved. Country specifically still requires BOTH
+     * libpostal's own confidence flag AND an independent match against the
+     * real ISO 3166 list below - not trusted on the sidecar's self-check
+     * alone.
      */
     private void enrichWithStructuredAddress(StructuredAddressRule rule, Map<String, String> sub,
                                               Map<String, String> tree, List<Map<String, Object>> trace, String sourceField) {
-        if (rule == null || rule.getSourceSubElement() == null) {
+        if (rule == null || rule.getSourceSubElement() == null || !props.isAddressParserEnabled()) {
             return;
         }
         // Sub-element repetitions (from lines_from:) are keyed "Name#0",
@@ -555,20 +586,73 @@ public class ConverterService {
         }
 
         ParsedAddress parsed = addressParserClient.parse(lines);
-        if (parsed == null || !parsed.isConfident()) {
-            return;
-        }
+        // v2.37's own reasoning (see CHANGELOG_MT103_TO_PACS008.md): street/city/postcode are
+        // written WHENEVER libpostal returns them, regardless of country confidence - gating all
+        // four fields on one confidence flag (as an earlier, since-corrected version of this
+        // method did) throws away a correctly-extracted city/street just because country alone
+        // couldn't be resolved. Country specifically still requires BOTH libpostal's own
+        // confidence flag AND an independent match against the real ISO 3166 list - not trusted
+        // on the sidecar's self-check alone.
+        String street = parsed == null ? null : parsed.getStreet();
+        String city = parsed == null ? null : parsed.getCity();
+        String postcode = parsed == null ? null : parsed.getPostcode();
+        String country = (parsed != null && parsed.isConfident() && parsed.getCountryCode() != null
+                && ISO_COUNTRY_CODES.contains(parsed.getCountryCode().toUpperCase()))
+                ? parsed.getCountryCode().toUpperCase() : null;
 
         Map<String, String> targets = rule.getTargets();
-        putIfPresent(tree, targets.get("street"), parsed.getStreet());
-        putIfPresent(tree, targets.get("city"), parsed.getCity());
-        putIfPresent(tree, targets.get("postcode"), parsed.getPostcode());
-        putIfPresent(tree, targets.get("country"), parsed.getCountryCode());
-        trace.add(traceRow(sourceField, rule.getSourceSubElement(), parsed, "structured_address"));
+        putIfPresent(tree, targets.get("street"), street);
+        putIfPresent(tree, targets.get("city"), city);
+        putIfPresent(tree, targets.get("postcode"), postcode);
+        putIfPresent(tree, targets.get("country"), country);
+
+        // Opt-in AdrLine cleanup (2026-09-15) - see StructuredAddressRule.adrLineTargetPath's
+        // Javadoc for the full reasoning. Only runs when the mapping doc configured it, and only
+        // removes a line that is a CLEAN, WHOLE-line, exact (case-insensitive/trimmed) match to
+        // street or city - never a partial/substring match, which would risk discarding
+        // legitimately un-captured content sitting alongside a recognized name (e.g. "India New
+        // Delhi" contains "India" but is NOT removed, since "New Delhi" would be lost with it).
+        if (rule.getAdrLineTargetPath() != null && (street != null || city != null)) {
+            List<String> survivors = new java.util.ArrayList<>();
+            for (String line : lines) {
+                String trimmed = line.strip();
+                boolean isDuplicate = (street != null && trimmed.equalsIgnoreCase(street))
+                        || (city != null && trimmed.equalsIgnoreCase(city));
+                if (!isDuplicate) {
+                    survivors.add(line);
+                }
+            }
+            if (survivors.size() != lines.size()) {
+                for (int i = 0; i < lines.size(); i++) {
+                    tree.remove(rule.getAdrLineTargetPath() + "#" + i);
+                }
+                for (int i = 0; i < survivors.size(); i++) {
+                    tree.put(rule.getAdrLineTargetPath() + "#" + i, survivors.get(i));
+                }
+            }
+        }
+
+        if (street != null || city != null || postcode != null || country != null) {
+            Map<String, String> resultSummary = new LinkedHashMap<>();
+            resultSummary.put("street", street);
+            resultSummary.put("city", city);
+            resultSummary.put("postcode", postcode);
+            resultSummary.put("country", country);
+            trace.add(traceRow(sourceField, rule.getSourceSubElement(), resultSummary, "structured_address"));
+        }
     }
 
     private void putIfPresent(Map<String, String> tree, String targetPath, String value) {
-        if (targetPath != null && value != null && !value.isBlank()) {
+        // v2.41 FIX (2026-09-15): only write if this target path isn't ALREADY populated by a
+        // deterministic sub_element (e.g. the numbered-line 50K/59 variants' own "3/XX/City" regex
+        // for Ctry/TwnNm) - never overwrite a deterministic, format-explicit extraction with a
+        // sidecar guess. This is what makes it safe to list city/country in those entries'
+        // structured_address.targets alongside their existing deterministic Ctry/TwnNm sub_elements
+        // (previously they were deliberately left OUT of targets entirely to avoid this exact
+        // overwrite risk - see MT103_TO_PACS00800108.yaml's v2.41 note on those two entries for the
+        // real message that motivated closing this gap instead of just avoiding it).
+        if (targetPath != null && value != null && !value.isBlank()
+                && (tree.get(targetPath) == null || tree.get(targetPath).isBlank())) {
             tree.put(targetPath, value);
         }
     }

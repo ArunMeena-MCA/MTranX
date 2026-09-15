@@ -43,6 +43,17 @@ mtmx:
   address-parser-enabled: ${MTMX_ADDRESS_PARSER_ENABLED:false}
   address-parser-url: ${MTMX_ADDRESS_PARSER_URL:http://localhost:8090/parse-address}
 
+# Automated dashboard's Oracle source (pmtb_msg_dly_msg_out) - see OracleProperties and
+# automation/OracleMessageFetchService. All blank by default; the automated dashboard's fetch
+# endpoint fails with a clear "not configured" message rather than attempting a connection with
+# empty credentials.
+oracle:
+  host: ${ORACLE_DB_HOST:}
+  port: ${ORACLE_DB_PORT:1521}
+  service-name: ${ORACLE_DB_SERVICE_NAME:}
+  username: ${ORACLE_DB_USERNAME:}
+  password: ${ORACLE_DB_PASSWORD:}
+
 logging:
   level:
     com.wiredesk.mtmx: INFO

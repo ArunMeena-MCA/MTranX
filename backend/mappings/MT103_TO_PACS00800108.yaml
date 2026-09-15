@@ -1,8 +1,8 @@
 conversion_id: MT103_TO_PACS008
 source_format: MT103
 target_format: pacs.008.001.08
-version: "2.34"
-last_updated: "2026-09-10"
+version: "2.41"
+last_updated: "2026-09-15"
 scope_notes: >
   SWIFT MT103 -> pacs.008.001.08 mapping profile.
 
@@ -428,6 +428,9 @@ field_mappings:
   transformation: llm_assisted
   gate_pattern: "^//"
   notes: >-
+    RULE: this is the clearing-system CODE half of 53A's "//"-prefixed clearing-system line - the MmbId entry
+    right above holds the member-ID half of the SAME source line. The two are sub-parts of one value, not
+    independently-derived fields that could conflict with each other.
     v2.22 ADDITION (2026-09-07, TC75): paired with the MmbId entry above - see its notes for the TARGET2 Annex 5.1.3
     citation. Same lookup table as 52A/56A/57A's paired entries (Country / System / MT code / ISO 20022 code):
     Australia AU->AUBSB; Austria AT->ATBLZ; Canada CC->CACPA; China CN->CNAPS; Germany BL->DEBLZ; Greece GR->GRHIC;
@@ -888,6 +891,15 @@ field_mappings:
     skip_if_any_present: true
     if_none_present_field: "__MT_SENDER_BIC__"
   notes: >
+    RULE: DbtrAgt is populated from field 52a's own definition - when 52A/52D are absent, the Sender IS the Ordering
+    Institution, so DbtrAgt = the Sender BIC. DbtrAgt can therefore legitimately equal InstgAgt's value in that case
+    (both independently derived from the same Sender), or differ when 52A/52D IS present (Ordering Institution
+    differs from the Sender) - either outcome is correct, NOT a conflict or duplication between the two fields.
+    v2.36 CHANGELOG (2026-09-11): this note previously led with changelog history (see below) rather than the rule
+    itself - the same firstSentence()-truncation blind spot already fixed for the InstgAgt/InstdAgt entries in
+    v2.32, but missed here and on the CdtrAgt fallback entry, which is exactly why the semantic audit kept
+    confusing DbtrAgt/CdtrAgt with InstgAgt/InstdAgt specifically (it had clear rule text for one pair but not the
+    other). Reordered so the rule leads; nothing deleted, only reordered - full original history follows below.
     v2.1 CITATION FIX: this fallback was originally recorded only as a "USER-PROVIDED RULE (2026-08-28)" with no independent
     sourcing. It is now confirmed against the official Swift MT103 Standards field definition for 52a (Ordering Institution):
     "Specifies the Financial Institution of the Ordering Customer, when different from the Sender." This is a universal
@@ -1109,6 +1121,9 @@ field_mappings:
   transformation: llm_assisted
   gate_pattern: "^//"
   notes: >-
+    RULE: this is the clearing-system CODE half of 56C's "//"-prefixed clearing-system line - the MmbId entry
+    right above holds the member-ID half of the SAME source line. The two are sub-parts of one value, not
+    independently-derived fields that could conflict with each other.
     v2.23 ADDITION (2026-09-07, TC78): paired with the MmbId entry above. Same lookup table as 52A/56A(A)/57A's
     paired entries (Country / System / MT code / ISO 20022 code): Australia AU->AUBSB; Austria AT->ATBLZ; Canada
     CC->CACPA; China CN->CNAPS; Germany BL->DEBLZ; Greece GR->GRHIC; Hong Kong HK->HKNCC; India IN->INFSC; Ireland
@@ -1238,6 +1253,9 @@ field_mappings:
   extract_pattern: "^[A-Z]{3}(.+)$"
   currency_from_target_path: "CdtTrfTxInf.ChrgsInf#0.Amt.@Ccy"
   notes: >-
+    RULE: this is the AMOUNT half of Sender's Charges (71F)'s currency+amount composite - the currency-portion
+    entry right above holds the OTHER half of the SAME source line. Sub-parts of one value, not independently-
+    derived fields that could conflict.
     Paired with the currency-portion entry above - see its notes, including the v2.17 repeat_lines fix (identical
     reasoning applies here verbatim).
     v2.26 BUG FIX (2026-09-07): added currency_from_target_path, same fix as the 32A amount entry's identical v2.26
@@ -1302,6 +1320,9 @@ field_mappings:
   extract_pattern: "^[A-Z]{3}(.+)$"
   currency_from_target_path: "CdtTrfTxInf.ChrgsInf#1.Amt.@Ccy"
   notes: >-
+    RULE: this is the AMOUNT half of Receiver's Charges (71G)'s currency+amount composite - the currency-portion
+    entry right above holds the OTHER half of the SAME source line. Sub-parts of one value, not independently-
+    derived fields that could conflict.
     Paired with the currency-portion entry above - see its notes.
     v2.26 BUG FIX (2026-09-07): added currency_from_target_path, same fix as the 32A amount entry's identical v2.26
     note (TC66).
@@ -1476,6 +1497,9 @@ field_mappings:
   transformation: llm_assisted
   max_chunk_length: 140
   notes: >-
+    RULE: this entry captures any field 72 codeword OTHER than /INS/ (-> PrvsInstgAgt1/2/3) or /ACC/ (-> the
+    entry directly above, InstrForCdtrAgt.InstrInf) - routed here to Instruction-for-Next-Agent instead, as
+    literal, undecoded codeword text.
     v2.9 GAP FIX: paired with the /ACC/ entry above - see its notes for the sourcing. The SAME JPMorgan worked
     example's remaining codewords ("/PRIORITY/" and "/FND/", neither of which is /INS/ or /ACC/) were collected into
     "<InstrForNxtAgt><InstrInf>/PRIORITY/ /FND/</InstrInf></InstrForNxtAgt>" - i.e. left as literal codeword text,
@@ -1869,6 +1893,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.Dbtr"
   mandatory: false
   transformation: decompose_party
+  anti_gate_pattern: "(?m)^\\d/"
   decomposition:
     pattern_description: >
       USER-PROVIDED RULE (2026-08-31, business-correctness review):
@@ -1915,6 +1940,7 @@ field_mappings:
         else_target: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
     structured_address:
       source_sub_element: "AdrLine"
+      adr_line_target_path: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
       targets:
         street: "CdtTrfTxInf.Dbtr.PstlAdr.StrtNm"
         city: "CdtTrfTxInf.Dbtr.PstlAdr.TwnNm"
@@ -1922,6 +1948,24 @@ field_mappings:
         country: "CdtTrfTxInf.Dbtr.PstlAdr.Ctry"
     fallback_if_unparseable: raise_error
   notes: >-
+    v2.40 ADDITION (2026-09-15, user-requested "act intelligently wherever confident"): added
+    adr_line_target_path so once libpostal confidently resolves street/city from this entry's own AdrLine
+    content, any individual AdrLine occurrence that is an EXACT (case-insensitive) duplicate of that street or
+    city is removed - e.g. a real message with AdrLine=["Street","Chennai","India New Delhi"] resolving
+    StrtNm="street"/TwnNm="chennai" now keeps only AdrLine=["India New Delhi"] (the genuinely un-captured
+    remainder), not all three lines including the two that are now purely redundant with the structured fields.
+    Deliberately conservative: only a clean, whole-line match is removed - "India New Delhi" is NOT touched even
+    though it contains the word "India" (Ctry=IN came from a raw-text substring scan, not a clean match to the
+    whole line), since removing it would also discard "New Delhi" with nowhere else for that content to go. See
+    ConverterService.enrichWithStructuredAddress and StructuredAddressRule.adrLineTargetPath's own Javadoc.
+    v2.39 ADDITION (2026-09-15): added anti_gate_pattern, mirroring the identical fix applied to bare-59 the same
+    day (that entry's own notes give the full reasoning and the live message that motivated it) - this entry
+    steps aside when 50K's raw content actually contains Option-F-style numbered markers ("1/", "2/", "3/"),
+    which belongs to the new dedicated entry immediately below instead. No live 50K example with this exact
+    problem was reported (the reported case was on field 59), but the identical risk exists here by construction
+    - both fields share the same "plain, first-line-is-name" convention this document already uses, so the same
+    numbered-line collision is possible on either one; applied proactively for symmetry rather than waiting for
+    a second live report of the same bug class.
     v1.16 GAP FIX: this document previously had NO entry populating Dbtr.Nm/PstlAdr for 50K at all - only a separate
     account-only entry existed (targeting DbtrAcct.Id.Othr.Id), so Dbtr rendered entirely empty even when a real name/address
     was present (the v1.12 empty-Dbtr placeholder default masked this by making it schema-VALID, but not business-correct).
@@ -1945,6 +1989,133 @@ field_mappings:
       this source"
   - condition: "A line is exactly '/' with no content after it"
     handling: "reject - genuinely malformed account line, distinct from 'no account line present at all'"
+
+- source_field: "50K"
+  source_name: "Ordering Customer, option K, but content uses Option-F-style numbered lines"
+  target_path: "CdtTrfTxInf.Dbtr"
+  mandatory: false
+  transformation: decompose_party
+  gate_pattern: "(?m)^\\d/"
+  decomposition:
+    pattern_description: >-
+      v2.39 ADDITION (2026-09-15): symmetric counterpart to the equivalent new entry added for field 59 the same
+      day (see that entry's own notes for the live-reported message that motivated this fix, and the reasoning
+      for why detecting an explicit "1/"/"2/"/"3/" marker is a content-driven fact, not a position-based or
+      address-pattern-based guess). Reuses 50F's own decomposition VERBATIM, including the Party
+      Identifier/DOB/POB sub-elements (50F's own numbered-line convention already extends to 1-5, per its own
+      v2.18 sourcing) - if a sender writes numbered-line content under plain 50K, there is no reason to assume
+      they only used markers 1-3 and not the fuller set 50F itself supports.
+      v2.40 BUG FIX (2026-09-15, user-reported real message: field 59's ':59:000005632\n1/ZZZ CORPRATION\nCENTER
+      350 N,\nST PAUL, SUITE 1300, DALLAS,' - see the mirrored 59-numbered entry below for the exact case this
+      was found on): AdrLine's regex previously ONLY matched lines explicitly starting with "2/" - any trailing
+      line with NO marker at all (a real, common mixed convention: a numbered Name line followed by plain
+      unmarked address continuation lines) matched nothing and was silently dropped entirely, nowhere in the
+      output. Broadened to ALSO capture any line that isn't claimed by another recognized marker (1/, 3/-5/, or
+      an ARNU/CCPT/CUST/DRLC/EMPL/NIDN/SOSE/TXID identity code) - this is the SAME "unmarked content is address
+      text" rule the plain 50K entry already applies to ALL its lines, just extended here to the leftover lines
+      a numbered entry doesn't otherwise claim. Deliberately excludes lines that are PURELY digits (no letters
+      at all) - a bare number is at least as likely to be a malformed/unmarked account reference (missing its
+      required leading "/") as it is address text, and this document does not guess between those two readings;
+      it stays uncaptured rather than being placed, possibly wrongly, into either.
+      v2.40 SELF-CAUGHT FIX (2026-09-15, found during this same change's own pre-ship verification, before any
+      user report): the broadened regex above initially had no exclusion for a leading account line (e.g. 50K's
+      "/00099887" line 1). strip_account_line_prefix already extracts that line into AccountId via its OWN
+      line-index-based pass (DecompositionService strips lines.get(0) before line:/lines_from: rules run) - but
+      a `regex:` sub_element rule (like this AdrLine one) matches against the FULL raw field value directly, a
+      separate code path strip_account_line_prefix does not touch. Net effect verified against a real
+      "50K:/00099887\n1/NAME\n2/Street\n3/GB/City" shape: the account line was captured a SECOND time as bogus
+      AdrLine text and fed into the libpostal sidecar alongside the real street line, producing a garbled
+      StrtNm. Added "(?!\\A/)" - matches strip_account_line_prefix's own exact scope (only the field's very
+      first line, only if it starts with "/") since \A anchors to the whole string start regardless of
+      MULTILINE, not just "any line starting with /" (which could be too broad if a later line coincidentally
+      started with "/"). Caught before this change was ever reported as working, per the standing "verify
+      against real behavior before shipping" rule.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm:
+        rule: "regex:^1/(.+)$"
+        optional: true
+        concat: true
+      AdrLine:
+        rule: "regex:^(?:2/)?(?!\\A/)(?!\\d/)(?!(?:ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/)(?!\\d+$)(.+)$"
+        optional: true
+        all_matches: true
+      Ctry:
+        rule: "regex:^3/([A-Z]{2})(?:/|$)"
+        optional: true
+      TwnNm:
+        rule: "regex:^3/[A-Z]{2}/(.+)$"
+        optional: true
+      IdCode:
+        rule: "regex:^(ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/[A-Z]{2}/.+$"
+        optional: true
+      IdCountry:
+        rule: "regex:^(?:ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/([A-Z]{2})/.+$"
+        optional: true
+      IdNumber:
+        rule: "regex:^(?:ARNU|CCPT|CUST|DRLC|EMPL|NIDN|SOSE|TXID)/[A-Z]{2}/(.+)$"
+        optional: true
+      BirthDt:
+        rule: "regex_date_yyyymmdd:^4/(\\d{8})$"
+        optional: true
+      CtryOfBirth:
+        rule: "regex:^5/([A-Z]{2})/"
+        optional: true
+      CityOfBirth:
+        rule: "regex:^5/[A-Z]{2}/(.+)$"
+        optional: true
+    sub_element_targets:
+      Nm: "CdtTrfTxInf.Dbtr.Nm"
+      AdrLine: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
+      Ctry: "CdtTrfTxInf.Dbtr.PstlAdr.Ctry"
+      TwnNm: "CdtTrfTxInf.Dbtr.PstlAdr.TwnNm"
+      IdCode: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.SchmeNm.Prtry"
+      IdCountry: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Issr"
+      IdNumber: "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Id"
+      BirthDt: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt"
+      CtryOfBirth: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CtryOfBirth"
+      CityOfBirth: "CdtTrfTxInf.Dbtr.Id.PrvtId.DtAndPlcOfBirth.CityOfBirth"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.DbtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.DbtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      adr_line_target_path: "CdtTrfTxInf.Dbtr.PstlAdr.AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Dbtr.PstlAdr.StrtNm"
+        city: "CdtTrfTxInf.Dbtr.PstlAdr.TwnNm"
+        postcode: "CdtTrfTxInf.Dbtr.PstlAdr.PstCd"
+        country: "CdtTrfTxInf.Dbtr.PstlAdr.Ctry"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    v2.41 BUG FIX (2026-09-15): mirrors the identical fix on the 59-numbered entry below (found via that
+    entry's own real user-reported message) - city/country are now included here too, safe from overwriting
+    this entry's own deterministic "3/XX/City" Ctry/TwnNm because ConverterService.putIfPresent (v2.41) never
+    overwrites an already-populated target path. Also added adr_line_target_path for the same AdrLine-dedup
+    reason as that entry.
+    ---
+    Deliberately identical decomposition to 50F above - see that entry's own notes for the full sourcing
+    (Bank of America PACS 008/MT 103 formatting guide, TARGET2 Annex 5.1.2). Exists only to catch the same
+    numbered-line CONTENT when it arrives under the plain "50K" tag instead of "50F". Not verified against a
+    real-world 50K example specifically (added proactively for symmetry with the 59 fix - see that entry's
+    notes); still safe to keep even if this exact case never occurs in practice, since gate_pattern means it
+    can only ever fire on content that explicitly contains a numbered marker, never on genuine plain free text.
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - AccountId is simply left unpopulated, the common case"
+  - condition: "Field absent, or no line begins with '1/'/'2/'/'3/'"
+    handling: "not an error on its own - this entry's gate_pattern means it never even runs in that case; the
+      plain-50K entry above handles it instead"
+  - condition: "Line begins with '3/' but is not followed by a 2-letter uppercase country code"
+    handling: "reject - do not guess the country"
+  - condition: "Address parser sidecar disabled, unreachable, or not confident"
+    handling: "not an error - StrtNm/TwnNm/PstCd/Ctry simply stay unpopulated (or, for Ctry/TwnNm, keep
+      whatever the deterministic '3/XX/City' line already produced - see v2.41 note above); AdrLine (already
+      written) is unaffected"
 
 - source_field: "59A"
   source_name: "Beneficiary Customer, option A - full decomposition (BIC + optional account, IBAN/Othr split)"
@@ -2005,6 +2176,7 @@ field_mappings:
   target_path: "CdtTrfTxInf.Cdtr"
   mandatory: false
   transformation: decompose_party
+  anti_gate_pattern: "(?m)^\\d/"
   decomposition:
     pattern_description: >
       USER-PROVIDED RULE (2026-08-31, business-correctness review):
@@ -2038,6 +2210,7 @@ field_mappings:
         else_target: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
     structured_address:
       source_sub_element: "AdrLine"
+      adr_line_target_path: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
       targets:
         street: "CdtTrfTxInf.Cdtr.PstlAdr.StrtNm"
         city: "CdtTrfTxInf.Cdtr.PstlAdr.TwnNm"
@@ -2045,6 +2218,20 @@ field_mappings:
         country: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
     fallback_if_unparseable: raise_error
   notes: >-
+    v2.40 ADDITION (2026-09-15, user-requested "act intelligently wherever confident"): added
+    adr_line_target_path, mirroring the identical fix on the 50K entry above (see its own v2.40 note for the
+    full reasoning) - once libpostal confidently resolves street/city from this entry's own AdrLine content,
+    any AdrLine occurrence that is an EXACT (case-insensitive) duplicate is removed as genuinely redundant;
+    partial/substring matches are deliberately left untouched.
+    v2.39 ADDITION (2026-09-15, from a live message the user reported: field 59 content ":59:000005632\n1/ZZZ
+    CORPRATION\nCENTER 350 N,\n..."): added anti_gate_pattern so this plain-line entry steps ASIDE when the raw
+    value actually contains Option-F-style numbered markers ("1/", "2/", "3/") - that content belongs to the new
+    dedicated entry immediately below (gated on the SAME regex, positively), which reuses 59F's own proven
+    numbered-line decomposition instead of this entry's naive "first line = name" rule. Without this,
+    "1/ZZZ CORPRATION" would be taken as the literal Cdtr/Nm value (including the "1/" prefix), which is
+    exactly the bug reported. See the new entry's own notes for the full reasoning and its scope: this
+    detects a real, unambiguous CONTENT signal (an explicit numbered-line marker), not a position-based or
+    address-pattern-based guess - a sender who writes "1/" is not leaving that up to interpretation.
     v1.16 GAP FIX: mirrors the 50K Dbtr entry above - this document previously had no entry populating Cdtr.Nm/PstlAdr for
     bare 59 at all, so Cdtr rendered entirely empty even when a real name/address was present.
 
@@ -2065,6 +2252,116 @@ field_mappings:
       from this source"
   - condition: "A line is exactly '/' with no content after it"
     handling: "reject - genuinely malformed account line, distinct from 'no account line present at all'"
+
+- source_field: "59"
+  source_name: "Beneficiary Customer, no letter, but content uses Option-F-style numbered lines"
+  target_path: "CdtTrfTxInf.Cdtr"
+  mandatory: false
+  transformation: decompose_party
+  gate_pattern: "(?m)^\\d/"
+  decomposition:
+    pattern_description: >-
+      v2.39 ADDITION (2026-09-15, from a live message the user reported): field 59 (no letter option) is
+      documented as plain, unnumbered free text - see the entry above. But a real message was seen with
+      ":59:000005632\n1/ZZZ CORPRATION\nCENTER 350 N,\nST PAUL, SUITE 1300, DALLAS,", where line 2 is
+      unmistakably an Option-F-style numbered marker ("1/" = Name, per field 59F's own convention - see that
+      entry below). The plain entry above would have taken "1/ZZZ CORPRATION" as the literal name (numbered
+      prefix and all), which is wrong. This is NOT a position-based or content-sniffing guess (unlike, say,
+      deciding a line "looks like a street address") - a "1/" prefix is an explicit, unambiguous structural
+      marker the sender chose to write; honoring it is a straightforward reading of the message, not an
+      inference. Reuses 59F's own decomposition rules VERBATIM (same regexes, same targets, same
+      structured_address wiring) rather than writing new parsing logic - this is genuinely the same shape of
+      content, just carried in the wrong tag (a real, seen phenomenon: some sender-side systems emit
+      numbered-line content under a plain 59 tag rather than 59F). gate_pattern above and the anti_gate_pattern
+      on the plain-59 entry are two sides of the same regex, making the two entries mutually exclusive by
+      CONTENT rather than by which tag the sender happened to use.
+      v2.40 BUG FIX (2026-09-15, from the exact real message that motivated this whole entry:
+      ':59:000005632\n1/ZZZ CORPRATION\nCENTER 350 N,\nST PAUL, SUITE 1300, DALLAS,'): AdrLine's regex only
+      matched lines starting with "2/" - the last two lines here have NO marker at all (a real, common mixed
+      convention: a numbered Name line followed by plain unmarked address continuation), so they matched
+      nothing and were silently dropped entirely - a real data-loss gap on top of the Nm fix this entry was
+      originally built for. Broadened to ALSO capture any line not claimed by another recognized marker (1/ or
+      3/) - the same "unmarked content is address text" rule the plain-59 entry above already applies to ALL
+      its lines. Deliberately excludes lines that are PURELY digits - a bare number is at least as likely to be
+      a malformed account reference (missing its required leading "/") as address text, and this document does
+      not guess between those two readings; it stays uncaptured (see this entry's own DISCLOSED SIDE EFFECT
+      note in the changelog) rather than being placed, possibly wrongly, into either.
+      v2.40 SELF-CAUGHT FIX (2026-09-15, found during pre-ship verification): same fix as the mirrored 50K-numbered
+      entry above - added "(?!\\A/)" so a leading "/account" line (already claimed by strip_account_line_prefix)
+      is not ALSO captured a second time as bogus AdrLine text. See that entry's own note for the full
+      before/after reasoning.
+    strip_account_line_prefix: true
+    account_line_pattern: "^/(.+)$"
+    account_sub_element: "AccountId"
+    sub_elements:
+      Nm:
+        rule: "regex:^1/(.+)$"
+        optional: true
+        concat: true
+      AdrLine:
+        rule: "regex:^(?:2/)?(?!\\A/)(?!\\d/)(?!\\d+$)(.+)$"
+        optional: true
+        all_matches: true
+      Ctry:
+        rule: "regex:^3/([A-Z]{2})(?:/|$)"
+        optional: true
+      TwnNm:
+        rule: "regex:^3/[A-Z]{2}/(.+)$"
+        optional: true
+    sub_element_targets:
+      Nm: "CdtTrfTxInf.Cdtr.Nm"
+      AdrLine: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
+      Ctry: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
+      TwnNm: "CdtTrfTxInf.Cdtr.PstlAdr.TwnNm"
+    conditional_sub_element_targets:
+      AccountId:
+        pattern: "[A-Z]{2}[0-9]{2}[A-Za-z0-9]{1,30}"
+        if_match_target: "CdtTrfTxInf.CdtrAcct.Id.IBAN"
+        else_target: "CdtTrfTxInf.CdtrAcct.Id.Othr.Id"
+    structured_address:
+      source_sub_element: "AdrLine"
+      adr_line_target_path: "CdtTrfTxInf.Cdtr.PstlAdr.AdrLine"
+      targets:
+        street: "CdtTrfTxInf.Cdtr.PstlAdr.StrtNm"
+        city: "CdtTrfTxInf.Cdtr.PstlAdr.TwnNm"
+        postcode: "CdtTrfTxInf.Cdtr.PstlAdr.PstCd"
+        country: "CdtTrfTxInf.Cdtr.PstlAdr.Ctry"
+    fallback_if_unparseable: raise_error
+  notes: >-
+    v2.41 BUG FIX (2026-09-15, user-reported real message: ':59:000005632\n1/ZZZ CORPRATION\nCENTER 350
+    N,\nST PAUL, SUITE 1300, DALLAS,'): city/country were deliberately left OUT of this entry's
+    structured_address.targets in v2.39/v2.40 to avoid overwriting a deterministically-extracted Ctry/TwnNm
+    from this entry's OWN "3/XX/City" line - but this real message has NO "3/" line at all, so TwnNm/Ctry
+    were never set by ANY path: not deterministically (no 3/ line to extract from) and not via the sidecar
+    (excluded from targets). Confirmed via direct sidecar test: parsing ["CENTER 350 N,", "ST PAUL, SUITE
+    1300, DALLAS,"] returns city="dallas" - a real, usable result that was being silently thrown away. Fixed
+    properly rather than just adding the target back: ConverterService.putIfPresent now only writes a
+    structured_address result when the target path ISN'T ALREADY populated (see its own v2.41 comment) - so
+    re-adding city/country here is safe even for a message that DOES have a "3/" line, since the
+    deterministic Ctry/TwnNm sub_elements run first and the sidecar can no longer clobber them. Also added
+    adr_line_target_path (previously null/no-op for this entry, since city/country never populated here
+    before) so an AdrLine that exactly duplicates a newly-resolved street/city is deduped the same way the
+    plain-59 entry above already does.
+    ---
+    Deliberately identical decomposition to 59F below (same source, same citation - Bank of America's PACS 008
+    and MT 103 formatting guide worked example) - see that entry's own notes for the full sourcing. This entry
+    exists only to catch the same numbered-line CONTENT when it arrives under the plain "59" tag instead of
+    "59F", per the live message that motivated this addition. Not verified against a second real-world example
+    beyond the one reported; if this pattern turns out to be a one-off malformed message rather than a real
+    sender convention, this entry is still safe to keep (it only ever fires when the content itself contains an
+    explicit numbered marker, so it cannot misfire on genuine plain free text).
+  edge_cases:
+  - condition: "No account line present"
+    handling: "not an error - AccountId is simply left unpopulated, the common case"
+  - condition: "Field absent, or no line begins with '1/'/'2/'/'3/'"
+    handling: "not an error on its own - this entry's gate_pattern means it never even runs in that case; the
+      plain-59 entry above handles it instead"
+  - condition: "Line begins with '3/' but is not followed by a 2-letter uppercase country code"
+    handling: "reject - do not guess the country"
+  - condition: "Address parser sidecar disabled, unreachable, or not confident"
+    handling: "not an error - StrtNm/TwnNm/PstCd/Ctry simply stay unpopulated (or, for Ctry/TwnNm, keep
+      whatever the deterministic '3/XX/City' line already produced - see v2.41 note above); AdrLine (already
+      written) is unaffected"
 
 - source_field: "59F"
   source_name: "Beneficiary Customer, option F - full decomposition (account, name, structured address)"
@@ -2184,6 +2481,9 @@ field_mappings:
   extract_pattern: "^[A-Z]{3}(.+)$"
   currency_from_target_path: "CdtTrfTxInf.InstdAmt.@Ccy"
   notes: >
+    RULE: this is the AMOUNT half of field 33B's Instructed Amount currency+amount composite - the currency-
+    portion entry right above holds the OTHER half of the SAME source line. Sub-parts of one value, not
+    independently-derived fields that could conflict.
     v1.11 STRUCTURAL FIX: paired with the currency-portion entry above.
     Comma-to-dot conversion uses the engine's existing
     decimal_comma_to_dot transformation, applied to whatever
@@ -2435,6 +2735,9 @@ field_mappings:
   transformation: llm_assisted
   gate_pattern: "^//"
   notes: >-
+    RULE: this is the clearing-system CODE half of 57C's "//"-prefixed clearing-system line - the MmbId entry
+    right above holds the member-ID half of the SAME source line. The two are sub-parts of one value, not
+    independently-derived fields that could conflict with each other.
     v2.23 ADDITION (2026-09-07, TC81): paired with the MmbId entry above. Field 57a's own CODES section for "option
     C, or D" (directly verified against the real SWIFT MT103 MRG) lists the LARGEST code set of the three agent
     fields - the same set as 56C (AT/AU/BL/CC/CH/CN/CP/ES/FW/GR/HK/IE/IN/IT/NZ/PL/PT/RU/SC/SW-x2) PLUS ZA (South
@@ -2507,6 +2810,18 @@ field_mappings:
     skip_if_any_present: true
     if_none_present_field: "__MT_RECEIVER_BIC__"
   notes: >
+    RULE: CdtrAgt is populated from field 57a's own definition - when 57A/57D are absent, the Receiver IS the
+    Account With Institution, so CdtrAgt = the Receiver BIC. CdtrAgt can therefore legitimately equal InstdAgt's
+    value in that case (both independently derived from the same Receiver), or differ when 57A/57D IS present
+    (Account With Institution differs from the Receiver) - either outcome is correct, NOT a conflict or
+    duplication between the two fields.
+    v2.36 CHANGELOG (2026-09-11, from a live conversion the user reported: the exact same message intermittently
+    passed and failed across repeated attempts on this specific InstdAgt/CdtrAgt pairing): this note previously
+    led with changelog history (see below) rather than the rule itself - the same firstSentence()-truncation
+    blind spot already fixed for the InstgAgt/InstdAgt entries in v2.32, but missed here and on the DbtrAgt
+    fallback entry, which is exactly why the semantic audit kept confusing CdtrAgt/DbtrAgt with InstdAgt/InstgAgt
+    specifically (it had clear rule text for one pair but not the other). Reordered so the rule leads; nothing
+    deleted, only reordered - full original history follows below.
     v2.1 CRITICAL CORRECTION: this entry previously justified itself by claiming "User confirmed (2026-08-31): this
     deployment targets TARGET2 specifically" and pointed to scope_notes for "the confirmed TARGET2 declaration" - but
     scope_notes explicitly states the opposite: "The user does not target TARGET2 specifically... No TARGET2-specific rule
@@ -2630,6 +2945,9 @@ field_mappings:
   extract_pattern: "/RNCTIME/(\\d{4}[+-]\\d{4})"
   date_from_target_path: "CdtTrfTxInf.IntrBkSttlmDt"
   notes: >-
+    RULE: this entry captures field 13C's RNCTIME codeword specifically (Receiver's time stamp) - a distinct
+    codeword and target from its sibling 13C entries (SNDTIME/CLSTIME/TILTIME/FROTIME/REJTIME), gated on its own
+    "/RNCTIME/" marker so it only ever fires for that specific codeword's content.
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword RNCTIME.
     v2.16 SOURCING: RNCTIME is one of the three codes confirmed for MT103 Field 13C by the official SWIFT MT103 field
     spec (see the SNDTIME entry above for the citation) - directly sourced, not just ported from the companion MT202 doc.
@@ -2652,6 +2970,9 @@ field_mappings:
   gate_pattern: "/CLSTIME/"
   extract_pattern: "/CLSTIME/(\\d{4}[+-]\\d{4})"
   notes: >-
+    RULE: this entry captures field 13C's CLSTIME codeword specifically (cover time / latest settlement cutoff) -
+    a distinct codeword and target from its sibling 13C entries, gated on its own "/CLSTIME/" marker so it only
+    ever fires for that specific codeword's content.
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword CLSTIME.
     v2.16 SOURCING: CLSTIME is one of the three codes confirmed for MT103 Field 13C by the official SWIFT MT103 field
     spec (see the SNDTIME entry above for the citation) - directly sourced, not just ported from the companion MT202 doc.
@@ -2675,6 +2996,9 @@ field_mappings:
   gate_pattern: "/TILTIME/"
   extract_pattern: "/TILTIME/(\\d{4}[+-]\\d{4})"
   notes: >-
+    RULE: this entry captures field 13C's TILTIME codeword specifically ("till time") - a distinct codeword and
+    target from its sibling 13C entries, gated on its own "/TILTIME/" marker so it only ever fires for that
+    specific codeword's content.
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword TILTIME.
     v2.16 SOURCING CAVEAT (2026-09-03): unlike CLSTIME/RNCTIME/SNDTIME (see the SNDTIME entry above), the real SWIFT
     "Standards MT November 2021" MT103 Message Reference Guide's CODES table for Field 13C lists ONLY CLSTIME/RNCTIME/
@@ -2699,6 +3023,9 @@ field_mappings:
   gate_pattern: "/FROTIME/"
   extract_pattern: "/FROTIME/(\\d{4}[+-]\\d{4})"
   notes: >-
+    RULE: this entry captures field 13C's FROTIME codeword specifically ("from time") - a distinct codeword and
+    target from its sibling 13C entries, gated on its own "/FROTIME/" marker so it only ever fires for that
+    specific codeword's content.
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword FROTIME.
     v2.16 SOURCING CAVEAT: same as the TILTIME entry above - FROTIME is not in the official SWIFT MT103 Field 13C
     CODES table either (only CLSTIME/RNCTIME/SNDTIME are), a disclosed, unresolved gap.
@@ -2717,6 +3044,9 @@ field_mappings:
   gate_pattern: "/REJTIME/"
   extract_pattern: "/REJTIME/(\\d{4}[+-]\\d{4})"
   notes: >-
+    RULE: this entry captures field 13C's REJTIME codeword specifically ("reject time") - a distinct codeword
+    and target from its sibling 13C entries, gated on its own "/REJTIME/" marker so it only ever fires for that
+    specific codeword's content.
     v2.7 GAP FIX: paired with the SNDTIME entry above - identical mechanism, codeword REJTIME. An unrecognized 7th+
     codeword is a documented gap (see known_limitations); none of these six entries will match it, and no catch-all
     entry exists, so it is silently not carried forward rather than rejected outright.
@@ -2943,6 +3273,9 @@ field_mappings:
   transformation: llm_assisted
   gate_pattern: "/ORDERRES/|/BENEFRES/"
   notes: >-
+    RULE: this is the country-code half of field 77B's regulatory-reporting line - the DbtCdtRptgInd entry right
+    above holds the reporting-direction (debit/credit) half of the SAME source line. Sub-parts of one value, not
+    independently-derived fields that could conflict.
     v2.7 GAP FIX: paired with the DbtCdtRptgInd entry above - identical codeword detection. Matches the source
     guide's own worked example (":77B:/BENEFRES/CA" - "CA" is a 2-letter ISO country code), which fits Dtls/Ctry's
     CountryCode datatype ([A-Z]{2} pattern) exactly. DECISION PROCEDURE: if a 77B line begins with /ORDERRES/xx or

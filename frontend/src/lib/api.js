@@ -42,6 +42,51 @@ export async function convertMessage({ rawText, sourceFormat, targetFormat }) {
   return body;
 }
 
+/**
+ * GET /api/automated/messages - pulls the automated dashboard's fixed batch of real MT103
+ * messages from Oracle. Same structured-error shape as convertMessage() on failure (stage
+ * "fetch" specifically means "Oracle isn't configured / unreachable").
+ */
+export async function fetchAutomatedMessages() {
+  const res = await fetch(`${API_BASE}/api/automated/messages`);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = body?.detail || {};
+    const err = new Error(detail.message || "Could not fetch messages from Oracle.");
+    err.stage = detail.stage || "unknown";
+    err.errorType = detail.error_type || "Error";
+    throw err;
+  }
+  return body;
+}
+
+/**
+ * POST /api/automated/convert - converts one fetched MT103 message (by reference number) and
+ * archives it server-side to backend/sample/<reference_no>.md. Same structured-error shape as
+ * convertMessage().
+ */
+export async function convertAutomatedMessage({ referenceNo, message }) {
+  const res = await fetch(`${API_BASE}/api/automated/convert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reference_no: referenceNo, message }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const detail = body?.detail || {};
+    const err = new Error(detail.message || "Conversion failed.");
+    err.stage = detail.stage || "unknown";
+    err.errorType = detail.error_type || "Error";
+    err.errors = detail.errors || null;
+    err.warnings = detail.warnings || null;
+    throw err;
+  }
+
+  return body;
+}
+
 /** GET /api/mappings/check - cheap existence preview, no file upload. */
 export async function checkMappingExists({ sourceFormat, targetFormat }) {
   const params = new URLSearchParams({ source_format: sourceFormat, target_format: targetFormat });

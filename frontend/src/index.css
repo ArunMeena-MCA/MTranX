@@ -37,6 +37,61 @@ body {
   animation: scanline 1.4s ease-in-out infinite;
 }
 
+/* Automated dashboard ("jazzy" theme) - scoped animations, only used there. */
+@keyframes pulse-dot {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(91, 127, 222, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(91, 127, 222, 0);
+  }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(31, 156, 124, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(31, 156, 124, 0);
+  }
+}
+.animate-pulse-dot-green {
+  animation: pulse-dot-green 1.4s ease-in-out infinite;
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-float-in {
+  animation: float-in 0.25s ease-out;
+}
+
 /* thin custom scrollbar for the message panes */
 .pane-scroll::-webkit-scrollbar {
   width: 8px;

@@ -38,7 +38,18 @@ public class AddressParserClient {
     private static final Logger log = LoggerFactory.getLogger(AddressParserClient.class);
 
     private final AppProperties props;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    // BUG FIX (2026-09-15, from live testing while enabling this service): java.net.http.HttpClient
+    // defaults to PREFERRING HTTP/2, which sends an "Upgrade: h2c" cleartext-upgrade header on the
+    // first request. uvicorn (a plain HTTP/1.1 ASGI server, no h2c support) doesn't reject this
+    // cleanly - it logs "Unsupported upgrade request" and processes the request in a way that
+    // corrupts the body before Pydantic sees it, so every call failed with 422 Unprocessable
+    // Entity even though the exact same JSON body worked fine via a plain curl request. Forcing
+    // HTTP/1.1 explicitly avoids the upgrade attempt entirely - a well-documented gotcha of this
+    // client talking to any server that doesn't support HTTP/2, not specific to this sidecar.
+    private final HttpClient http = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(2))
+            .build();
     private final ObjectMapper json = new ObjectMapper();
 
     public AddressParserClient(AppProperties props) {
