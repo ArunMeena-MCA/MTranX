@@ -601,10 +601,48 @@ public class ConverterService {
                 ? parsed.getCountryCode().toUpperCase() : null;
 
         Map<String, String> targets = rule.getTargets();
-        putIfPresent(tree, targets.get("street"), street);
-        putIfPresent(tree, targets.get("city"), city);
-        putIfPresent(tree, targets.get("postcode"), postcode);
-        putIfPresent(tree, targets.get("country"), country);
+        String streetTarget = targets.get("street");
+        String cityTarget = targets.get("city");
+        String postcodeTarget = targets.get("postcode");
+        String countryTarget = targets.get("country");
+        // Computed BEFORE this call can change anything - true only when an earlier deterministic
+        // sub_element (the numbered-line entries' own "3/XX/City" regex) already wrote BOTH TwnNm
+        // and Ctry. Used below to scope the AdrLine-count cap fallback so it never discards an
+        // already-solid, independently-sourced TwnNm/Ctry pair over an unrelated AdrLine-count
+        // problem - see that check's own comment.
+        boolean hybridAlreadyEstablishedDeterministically = isPresent(tree, cityTarget) && isPresent(tree, countryTarget);
+
+        // v2.43 FIX (2026-09-16, verified directly against PMPG's "Hybrid Postal Address" guide
+        // v1.12): "TownName and Country are mandatory elements within the PostalAddress when a
+        // hybrid address is used" - i.e. required TOGETHER, not one alone. "Present" here means
+        // EITHER this sidecar call resolved it OR an earlier deterministic sub_element in this
+        // same decompose entry already wrote it (e.g. the numbered-line 50K/59/50F/59F entries'
+        // own "3/XX/City" regex) - a lone Ctry from a malformed "3/GB" line with no town portion
+        // is just as non-compliant as the sidecar resolving city without country, so both sources
+        // are checked the same way.
+        boolean cityWillBePresent = city != null || isPresent(tree, cityTarget);
+        boolean countryWillBePresent = country != null || isPresent(tree, countryTarget);
+        if (!cityWillBePresent || !countryWillBePresent) {
+            // Suppress ALL structured enrichment for this address - including any already-written
+            // deterministic Ctry/TwnNm - rather than leave a non-compliant partial hybrid. AdrLine
+            // is untouched at this point (the dedup step below hasn't run yet), so the address
+            // simply stays fully unstructured - still valid, no expiry, per the same guide.
+            removeIfPresent(tree, cityTarget);
+            removeIfPresent(tree, countryTarget);
+            removeIfPresent(tree, streetTarget);
+            removeIfPresent(tree, postcodeTarget);
+            if (street != null || city != null || postcode != null || country != null) {
+                Map<String, String> resultSummary = new LinkedHashMap<>();
+                resultSummary.put("street", street);
+                resultSummary.put("city", city);
+                resultSummary.put("postcode", postcode);
+                resultSummary.put("country", country);
+                resultSummary.put("suppressed_reason",
+                        "hybrid requires TwnNm+Ctry together (PMPG Hybrid Postal Address v1.12) - not both confirmed");
+                trace.add(traceRow(sourceField, rule.getSourceSubElement(), resultSummary, "structured_address_suppressed"));
+            }
+            return;
+        }
 
         // Opt-in AdrLine cleanup (2026-09-15) - see StructuredAddressRule.adrLineTargetPath's
         // Javadoc for the full reasoning. Only runs when the mapping doc configured it, and only
@@ -612,8 +650,9 @@ public class ConverterService {
         // street or city - never a partial/substring match, which would risk discarding
         // legitimately un-captured content sitting alongside a recognized name (e.g. "India New
         // Delhi" contains "India" but is NOT removed, since "New Delhi" would be lost with it).
+        List<String> survivors = lines;
         if (rule.getAdrLineTargetPath() != null && (street != null || city != null)) {
-            List<String> survivors = new java.util.ArrayList<>();
+            survivors = new java.util.ArrayList<>();
             for (String line : lines) {
                 String trimmed = line.strip();
                 boolean isDuplicate = (street != null && trimmed.equalsIgnoreCase(street))
@@ -622,13 +661,48 @@ public class ConverterService {
                     survivors.add(line);
                 }
             }
-            if (survivors.size() != lines.size()) {
-                for (int i = 0; i < lines.size(); i++) {
-                    tree.remove(rule.getAdrLineTargetPath() + "#" + i);
-                }
-                for (int i = 0; i < survivors.size(); i++) {
-                    tree.put(rule.getAdrLineTargetPath() + "#" + i, survivors.get(i));
-                }
+        }
+
+        // v2.43 FIX: the same PMPG guide caps hybrid's AdrLine at up to 2 occurrences (of 70
+        // characters each - not checked separately here, since every source line already comes
+        // from an MT field line limited to 35 characters, well under that per-line cap). Rather
+        // than guess how to truncate or consolidate overflow content into 2 lines (risking silent
+        // data loss), fall back the same way as the missing-TwnNm/Ctry case above: undo the whole
+        // hybrid enrichment for this address and leave AdrLine exactly as originally written.
+        // Scoped to NOT fire when TwnNm/Ctry were already reliably established by a deterministic
+        // "3/XX/City" marker before this call: an unrelated AdrLine-count overflow (e.g. extra
+        // unmarked trailing lines the numbered-line entries' own broadened capture picks up) must
+        // not discard an already-solid, independently-sourced TwnNm/Ctry pair - the two problems
+        // are independent, and only the sidecar-established case has "the whole address" as a
+        // single, all-or-nothing unit to safely undo.
+        if (rule.getAdrLineTargetPath() != null && survivors.size() > 2 && !hybridAlreadyEstablishedDeterministically) {
+            removeIfPresent(tree, cityTarget);
+            removeIfPresent(tree, countryTarget);
+            removeIfPresent(tree, streetTarget);
+            removeIfPresent(tree, postcodeTarget);
+            Map<String, String> resultSummary = new LinkedHashMap<>();
+            resultSummary.put("street", street);
+            resultSummary.put("city", city);
+            resultSummary.put("postcode", postcode);
+            resultSummary.put("country", country);
+            resultSummary.put("suppressed_reason",
+                    "hybrid AdrLine cap of 2 occurrences (PMPG Hybrid Postal Address v1.12) exceeded after dedup ("
+                            + survivors.size() + " lines remaining)");
+            trace.add(traceRow(sourceField, rule.getSourceSubElement(), resultSummary, "structured_address_suppressed"));
+            return;
+        }
+
+        putIfPresent(tree, streetTarget, street);
+        putIfPresent(tree, cityTarget, city);
+        putIfPresent(tree, postcodeTarget, postcode);
+        putIfPresent(tree, countryTarget, country);
+
+        if (rule.getAdrLineTargetPath() != null && survivors.size() != lines.size()) {
+            for (int i = 0; i < lines.size(); i++) {
+                tree.remove(rule.getAdrLineTargetPath() + "#" + i);
+            }
+            for (int i = 0; i < survivors.size(); i++) {
+                tree.put(rule.getAdrLineTargetPath() + "#" + i, survivors.get(i));
             }
         }
 
@@ -639,6 +713,20 @@ public class ConverterService {
             resultSummary.put("postcode", postcode);
             resultSummary.put("country", country);
             trace.add(traceRow(sourceField, rule.getSourceSubElement(), resultSummary, "structured_address"));
+        }
+    }
+
+    private boolean isPresent(Map<String, String> tree, String targetPath) {
+        if (targetPath == null) {
+            return false;
+        }
+        String value = tree.get(targetPath);
+        return value != null && !value.isBlank();
+    }
+
+    private void removeIfPresent(Map<String, String> tree, String targetPath) {
+        if (targetPath != null) {
+            tree.remove(targetPath);
         }
     }
 

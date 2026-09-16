@@ -10,6 +10,89 @@ not back into the YAML's `known_limitations` field.
 
 ```yaml
 known_limitations:
+- "v2.43 BUG FIX (2026-09-16, user request: 'fix it as per SR2025, i want my converter to follow rules properly',
+  following directly from the two deviations disclosed in the v2.42 entry below). Both are now enforced in
+  ConverterService.enrichWithStructuredAddress rather than merely documented. (1) TwnNm+Ctry mandatory together:
+  PMPG's 'Hybrid Postal Address' guide (v1.12) states 'TownName and Country are mandatory elements... when a
+  hybrid address is used' - required TOGETHER, not one alone. Added a check (isPresent/removeIfPresent helpers)
+  covering BOTH this method's own sidecar resolution AND any earlier deterministic sub_element in the same
+  decompose entry (the numbered-line 50F/59F/50K/59 entries' own '3/XX/City' regex) - if city AND country will
+  not BOTH end up present, ALL structured fields for that address (including an already-written lone
+  deterministic Ctry or TwnNm) are removed and AdrLine is left completely untouched, falling back to fully
+  unstructured (still valid, no expiry - see v2.42's own finding). (2) AdrLine's 2-occurrence hybrid cap: if more
+  than 2 AdrLine lines remain after the confident-dedup step, the same all-or-nothing fallback applies - rather
+  than guess how to truncate or consolidate overflow content (real risk of silently losing data), the whole
+  hybrid enrichment for that address is undone. Deliberately scoped OUT of this fallback: an address where
+  TwnNm+Ctry were already reliably established by a deterministic '3/XX/City' marker before this method ran - an
+  unrelated AdrLine-count overflow (e.g. extra unmarked trailing lines the numbered-line entries' own broadened
+  capture picks up) must not discard an already-solid, independently-sourced TwnNm/Ctry pair; the two problems
+  (missing country vs. too many address lines) are independent, and only the sidecar-established case has 'the
+  whole address' as a single safe-to-undo unit. Character-length (70 chars/line) was NOT separately enforced -
+  every source line already comes from an MT field line limited to 35 characters, well under that cap, so it
+  cannot be violated by content originating from this converter's own MT parsing. Verified end-to-end against a
+  rebuilt temp instance (port 8001, never the user's own running instance) before reporting done: the ZZZ
+  CORPRATION/Colmore message's Cdtr (previously TwnNm=dallas, no Ctry) and Dbtr (previously TwnNm=birmingham, no
+  Ctry) both now correctly revert to plain AdrLine-only output, matching SR2025's actual mandatory-together rule;
+  the already-fully-valid cases (Chennai/India, Paris/Berlin, the numbered-50K test) are unaffected, confirming no
+  regression; and a new constructed test (a numbered-line message with a real '3/US/DALLAS' marker plus 3 extra
+  unmarked AdrLine lines) confirmed the AdrLine-cap fallback does NOT fire when TwnNm/Ctry came from that
+  deterministic marker - Ctry=US/TwnNm=DALLAS and all 3 AdrLine lines were preserved intact, exactly as designed."
+- "v2.42 DOCUMENTATION FIX + DISCLOSED FINDINGS (2026-09-16, user question: given SR2026 is on hold, why does this
+  converter emit TwnNm/StrtNm/Ctry at all - isn't that an SR2026-only thing?). Verified directly against the PMPG's
+  own 'Hybrid Postal Address' guide (v1.12, 5 March 2026) - fetched, and since the swift.com/ECB pages both
+  blocked automated fetching, the PDF itself was downloaded and its full text extracted and read (46 pages) rather
+  than relying on a summary. Finding: hybrid addressing is NOT an SR2026 feature - it was approved and 'will
+  become effective as of November 2025 (SR2025)... Allowed as of November 2025 (no end-date)'. Before 22 November
+  2025 structured elements and AdrLine were mutually exclusive; since SR2025 (i.e. right now, independent of
+  SR2026's own postponement - see the 2026-09-15 entry above), hybrid is valid and has no expiry. So this
+  document's existing structured-enrichment feature (v2.14 onward) is correct, currently-compliant SR2025 behavior,
+  not a premature SR2026 implementation - fixed the ADDRESS POLICY scope_notes paragraph, which previously (and
+  incorrectly) cited '14 November 2026' as when hybrid becomes usable, and separately still described the OLDER,
+  since-superseded all-fields-gated-on-country-confidence design instead of the actual current v2.37 independent
+  per-field gating - both were documentation-only inaccuracies, now corrected with direct citation. Two real,
+  disclosed (not auto-fixed) deviations found from the PMPG spec while doing this verification: (1) the guide
+  states 'TownName and Country are mandatory elements... when a hybrid address is used' - i.e. required TOGETHER -
+  but this document's independent-gating design (deliberate, v2.37) can produce TwnNm without Ctry, seen for real
+  in the ZZZ CORPRATION/Colmore test message (TwnNm=birmingham/dallas, no Ctry on either party); left as-is since
+  the alternative is either guessing a country we can't confirm or discarding a good TwnNm value, both worse. (2)
+  the guide caps hybrid's AdrLine at up to 2 occurrences of 70 characters; this document does not enforce that cap
+  (the pacs.008.001.08 schema itself allows up to 7). Neither was changed without the user's explicit direction,
+  consistent with this document's standing 'verify, don't guess, don't change blindly' rule - both are now
+  documented in the YAML's own ADDRESS POLICY note for whoever decides whether to act on them."
+- "OPERATIONAL NOTE (2026-09-15, no version bump - no YAML or Java changed): the user requested implementing
+  three SR2026 CBPR+ Mapping Library changes ahead of the then-understood 14 November 2026 hard deadline for
+  retiring unstructured postal addresses - (1) reject/stop-translate F50K and bare F59 whenever they carry
+  more than one line (Swift's T20367-equivalent), only F50F/F59F would remain allowed to carry an address at
+  all; (2) reject/stop-translate agent field 5xD (option D) unless one of lines 2-4 matches '3/CC/TOWN NAME'
+  and it isn't the first line (T20374-equivalent); (3) extend the Charges Information/71F NOTPROVIDED
+  dummy-data pattern to also emit TwnNm=NOTPROVIDED, Ctry=<from sender's BIC>, AdrLine='COUNTRYCODE ASSUMED'.
+  The user's own source for this was explicitly flagged as a third-party summary (Affinis), not Swift's
+  primary documentation, with an explicit ask to verify against the authoritative source before building
+  anything. Direct verification attempts against swift.com and the PMPG hybrid-postal-address PDF all
+  returned HTTP 403 (blocked for automated fetching) - the technical specifics above (exact T-codes, the
+  71F dummy pattern, the 5xD precondition wording) were therefore NEVER independently confirmed against a
+  Swift primary source, only against the same third-party article and IBM/Microsoft SWIFT-error-code
+  reference pages that don't corroborate the SR2026-specific behavior. Separately, and more importantly: web
+  research (independently corroborated across RedCompass Labs, Trade Treasury Payments, PaymentExpert, and
+  Crowdfund Insider, all describing the same 27 August 2026 Swift announcement) found that Swift has since
+  POSTPONED the entire SR2026 payments release - not just the address rules, but also the bundled MT
+  Category 1/CBPR+/SCORE+/SwiftGo changes - after data showed most of the industry was not ready (as of
+  April 2026, Swift's own figures showed roughly 61-62% of payments on the network still carried unstructured
+  debtor/creditor addresses). The 14 November 2026 deadline this whole request was built around no longer
+  applies; no replacement date has been set (Swift says an update will come by December 2026 at the latest,
+  after consulting banks, market infrastructures, and market practice groups); SR2025 - the currently active
+  release - remains in force and already supports structured/hybrid addresses as OPTIONAL, which is exactly
+  what this converter's existing libpostal-based hybrid enrichment (v2.14 onward) already does, unaffected by
+  any of this. Given both gaps (unverified technical specifics AND a suspended, undated deadline), building
+  hard rejection gates now would risk breaking this converter's current, correct handling of the large
+  majority of real MT103 messages (which use plain 50K/59 with multi-line addresses) for a rule that is not
+  currently in force and may still change during Swift's consultation. Presented this research to the user
+  directly, who chose (2026-09-15) to hold off entirely rather than implement now or build a disabled-by-
+  default flag - no code or mapping changes were made as a result of this request. Revisit once Swift
+  publishes its revised timeline/rules, and re-verify the technical specifics (T20367/T20374 exact trigger
+  conditions, the 71F dummy-data pattern, the 5xD precondition wording) against Swift's own primary CBPR+
+  Mapping Library / MyStandards documentation at that time rather than reusing this note's unverified
+  figures."
 - "v2.41 BUG FIX + DISCLOSED LIMITATION (2026-09-15, from the user re-checking v2.40's own output on the exact
   ZZZ CORPRATION and Colmore Row messages): two findings from that recheck, one fixed, one confirmed as
   expected/correct SWIFT-format behavior rather than a bug. (1) FIXED - city/country silently missing for the

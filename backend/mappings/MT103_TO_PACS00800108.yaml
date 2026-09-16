@@ -1,8 +1,8 @@
 conversion_id: MT103_TO_PACS008
 source_format: MT103
 target_format: pacs.008.001.08
-version: "2.41"
-last_updated: "2026-09-15"
+version: "2.43"
+last_updated: "2026-09-16"
 scope_notes: >
   SWIFT MT103 -> pacs.008.001.08 mapping profile.
 
@@ -35,21 +35,47 @@ scope_notes: >
   rather than inventing values.
 
 
-  ADDRESS POLICY (v2.14 UPDATE): 50K/bare-59's free-text AdrLine content can now OPTIONALLY be additionally enriched with
-  structured StrtNm/TwnNm/PstCd/Ctry via a libpostal-based sidecar service (address-parser-service/, called by
-  ConverterService.enrichWithStructuredAddress) - implementing the "hybrid address" model (structured fields ALONGSIDE
-  free-text AdrLine, not instead of it) Swift requires from 14 November 2026 for in-scope cross-border payment messages.
-  This is OFF by default (mtmx.address-parser-enabled=false) - AdrLine-only remains this document's default behavior,
-  schema-valid and SWIFT-compliant today. When enabled, structured fields are populated ONLY when the sidecar's own
-  country cross-check (against a real ISO 3166 list) succeeds - if it doesn't, or the sidecar is unreachable, the
-  message still converts successfully with AdrLine-only, exactly as before enabling the feature; nothing is ever lost,
-  and nothing is ever guessed. Still true, unchanged: this document does NOT itself infer Town/Country/PostalCode from
-  free text via regex/heuristic - the libpostal service is a real trained statistical model, not a hand-written guess,
-  and even it is not trusted blindly (see its own country-confidence gate). For F-option structured addresses (50F/59F),
-  the existing numbered-line extraction (unambiguous, since the source itself delimits country by position) is
-  unaffected by this change and remains the primary source for those fields. A deployment intended to be
-  live after 14 November 2026 must set mtmx.address-parser-enabled=true and actually run address-parser-service/ -
-  simply having this capability exist in the codebase does not make a deployment compliant if it isn't turned on.
+  ADDRESS POLICY (v2.14 UPDATE, DATE CORRECTED v2.42): 50K/bare-59's free-text AdrLine content can now OPTIONALLY be
+  additionally enriched with structured StrtNm/TwnNm/PstCd/Ctry via a libpostal-based sidecar service
+  (address-parser-service/, called by ConverterService.enrichWithStructuredAddress) - implementing the "hybrid address"
+  model (structured fields ALONGSIDE free-text AdrLine, not instead of it). CORRECTED (v2.42, verified directly against
+  the primary source - PMPG's own "Hybrid Postal Address" guide, v1.12, 5 March 2026, PDF text extracted and read in
+  full): hybrid addressing is NOT an SR2026-only concept - it was approved as a Change Request and "will become
+  effective as of November 2025 (SR2025)" with "no end-date". Before 22 November 2025, structured elements and AdrLine
+  "must not be used together... they are mutually exclusive" (pure fully-structured or pure fully-unstructured only);
+  since SR2025 (i.e. right now, independent of whatever happens with SR2026's own postponed unstructured-address
+  retirement - see the 2026-09-15 OPERATIONAL NOTE in CHANGELOG_MT103_TO_PACS008.md), hybrid is a currently-valid,
+  active option with no expiry. This is OFF by default (mtmx.address-parser-enabled=false) - AdrLine-only remains this
+  document's default behavior, schema-valid and SWIFT-compliant today (and remains valid indefinitely; nothing about
+  SR2025 or the stalled SR2026 makes AdrLine-only non-compliant on its own). When enabled: street/city/postcode are
+  populated whenever the sidecar returns them, regardless of its own overall confidence flag; Ctry additionally
+  requires BOTH the sidecar's own confidence flag AND an independent match against the real ISO 3166 list (see
+  ConverterService's own v2.37 comment for the full reasoning - CORRECTED here since this paragraph previously
+  described the OLDER, since-superseded design where ALL structured fields were gated behind country confidence
+  together). If the sidecar is unreachable or the country can't be confirmed, the message still converts successfully,
+  just with less structured enrichment; nothing is ever lost, and nothing is ever guessed. Still true, unchanged: this
+  document does NOT itself infer Town/Country/PostalCode from free text via regex/heuristic - the libpostal service is
+  a real trained statistical model, not a hand-written guess, and even it is not trusted blindly (see its own
+  country-confidence gate). For F-option structured addresses (50F/59F) and the numbered-line 50K/59 variants, the
+  existing "3/XX/City" numbered-line extraction (unambiguous, since the source itself delimits country by position) is
+  the deterministic primary source and always wins over the sidecar's own guess for the same field (v2.41).
+  FIXED (v2.43, 2026-09-16, user-requested "fix it as per SR2025, i want my converter to follow rules properly"): the
+  two deviations below (previously disclosed but left unfixed in v2.42) are now enforced. (1) TwnNm+Ctry mandatory
+  TOGETHER: ConverterService.enrichWithStructuredAddress now checks, for BOTH the sidecar's own resolution and any
+  earlier deterministic sub_element in the same decompose entry (the numbered-line entries' "3/XX/City" regex), whether
+  city AND country will BOTH end up present. If not, ALL structured enrichment for that address (including an
+  already-written deterministic Ctry or TwnNm alone) is removed and AdrLine is left completely untouched - the address
+  falls back to fully unstructured (still valid, no expiry) rather than a non-compliant partial hybrid. Verified for
+  real: the ZZZ CORPRATION/Colmore message's Cdtr (previously TwnNm=dallas, no Ctry) and Dbtr (previously
+  TwnNm=birmingham, no Ctry) both now correctly revert to plain AdrLine-only output. (2) AdrLine's 2-occurrence hybrid
+  cap: after the confident-dedup step, if more than 2 AdrLine lines remain, the whole structured enrichment is undone
+  the same way (rather than guessing how to truncate/consolidate overflow content, which risks silent data loss) -
+  EXCEPT when TwnNm+Ctry were already reliably established by a deterministic "3/XX/City" marker before this method
+  ran, in which case an unrelated AdrLine-count overflow does NOT discard that already-solid pair (verified with a
+  constructed test: a numbered-line message with a real "3/US/DALLAS" line plus 3 extra unmarked AdrLine lines kept
+  Ctry=US/TwnNm=DALLAS intact, all 3 AdrLine lines preserved - only the sidecar-established case treats the whole
+  address as an all-or-nothing unit). See ConverterService.java's own v2.43 comments for the full per-branch reasoning,
+  and CHANGELOG_MT103_TO_PACS008.md's v2.43 entry for the complete verification record.
 
 
   SETTLEMENT POLICY: SettlementMethod is not a value that can be safely inferred from the mere absence of 53/54/55. The current
