@@ -54,6 +54,23 @@ oracle:
   username: ${ORACLE_DB_USERNAME:}
   password: ${ORACLE_DB_PASSWORD:}
 
+# OBPS/FLEXCUBE SFTP file-drop integration - see FlexcubeSftpProperties, FlexcubeSftpClient,
+# FlexcubeFileWatcherJob. Disabled by default; the scheduled job checks isEnabled()/isConfigured()
+# on every cycle and simply skips (logging a warning) rather than attempting a connection with
+# missing credentials.
+flexcube:
+  enabled: ${FLEXCUBE_ENABLED:false}
+  host: ${FLEXCUBE_SFTP_HOST:}
+  port: ${FLEXCUBE_SFTP_PORT:22}
+  username: ${FLEXCUBE_SFTP_USERNAME:}
+  private-key-path: ${FLEXCUBE_SFTP_PRIVATE_KEY_PATH:}
+  passphrase: ${FLEXCUBE_SFTP_PASSPHRASE:}
+  password: ${FLEXCUBE_SFTP_PASSWORD:}
+  known-hosts-path: ${FLEXCUBE_SFTP_KNOWN_HOSTS_PATH:}
+  remote-base-path: ${FLEXCUBE_REMOTE_BASE_PATH:}
+  poll-interval-ms: ${FLEXCUBE_POLL_INTERVAL_MS:300000}
+  min-file-age-ms: ${FLEXCUBE_MIN_FILE_AGE_MS:30000}
+
 logging:
   level:
     com.wiredesk.mtmx: INFO

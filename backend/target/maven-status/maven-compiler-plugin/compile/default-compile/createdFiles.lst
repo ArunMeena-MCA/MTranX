@@ -1,5 +1,7 @@
+com\wiredesk\mtmx\exception\FlexcubeIntegrationException.class
 com\wiredesk\mtmx\mapping\model\StructuredAddressRule.class
 com\wiredesk\mtmx\llm\GeminiClient$4.class
+com\wiredesk\mtmx\automation\FlexcubeSftpClient$SftpWork.class
 com\wiredesk\mtmx\mapping\model\ConditionalRule.class
 com\wiredesk\mtmx\mapping\model\ConditionalSubElementTarget.class
 com\wiredesk\mtmx\mapping\model\MappingDocument.class
@@ -17,6 +19,7 @@ com\wiredesk\mtmx\exception\MappingDocInvalidException.class
 com\wiredesk\mtmx\orchestrate\ConversionResult.class
 com\wiredesk\mtmx\exception\OracleFetchException.class
 com\wiredesk\mtmx\exception\TransformationException.class
+com\wiredesk\mtmx\automation\FlexcubeFileWatcherJob.class
 com\wiredesk\mtmx\web\ConvertRequest.class
 com\wiredesk\mtmx\mapping\MappingRegistry.class
 com\wiredesk\mtmx\exception\MtmxException.class
@@ -32,6 +35,7 @@ com\wiredesk\mtmx\exception\ValidationFailedException.class
 com\wiredesk\mtmx\llm\GeminiClient$3.class
 com\wiredesk\mtmx\parser\DecompositionService.class
 com\wiredesk\mtmx\parser\MxParserService.class
+com\wiredesk\mtmx\automation\FlexcubeSftpClient.class
 com\wiredesk\mtmx\mapping\model\BusinessApplicationHeaderConfig.class
 com\wiredesk\mtmx\exception\MappingDocNotFoundException.class
 com\wiredesk\mtmx\llm\GeminiClient$2.class
@@ -44,6 +48,7 @@ com\wiredesk\mtmx\exception\MappingUploadConflictException.class
 com\wiredesk\mtmx\exception\SemanticDecompositionGapException.class
 com\wiredesk\mtmx\llm\GeminiClient.class
 com\wiredesk\mtmx\web\GlobalExceptionHandler.class
+com\wiredesk\mtmx\automation\FlexcubeSftpClient$RemoteFileEntry.class
 com\wiredesk\mtmx\convert\ConvertedMessage.class
 com\wiredesk\mtmx\MtmxConverterApplication.class
 com\wiredesk\mtmx\validate\ValidatorService.class
@@ -59,6 +64,7 @@ com\wiredesk\mtmx\convert\MxRenderer.class
 com\wiredesk\mtmx\web\AutomatedConversionController.class
 com\wiredesk\mtmx\automation\SampleArchiveService.class
 com\wiredesk\mtmx\convert\MtRenderer.class
+com\wiredesk\mtmx\config\FlexcubeSftpProperties.class
 com\wiredesk\mtmx\parser\MtParserService.class
 com\wiredesk\mtmx\mapping\model\ValidationRule.class
 com\wiredesk\mtmx\address\AddressParserClient.class

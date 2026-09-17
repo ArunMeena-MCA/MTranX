@@ -78,6 +78,18 @@
             <artifactId>ojdbc11</artifactId>
             <version>23.26.3.0.0</version>
         </dependency>
+
+        <!--
+          sshj - SFTP client used by automation/FlexcubeSftpClient to pull MT messages from the
+          OBPS/FLEXCUBE server's MT_out folder and write back MT_history/MX_out/MT_failed.
+          Actively maintained (unlike the original com.jcraft:jsch), with modern KEX/cipher/host-key
+          algorithm support - relevant since we don't yet know what SSH server config OBPS runs.
+        -->
+        <dependency>
+            <groupId>com.hierynomus</groupId>
+            <artifactId>sshj</artifactId>
+            <version>0.38.0</version>
+        </dependency>
     </dependencies>
 
     <build>
