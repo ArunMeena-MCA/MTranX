@@ -5,9 +5,9 @@
 :root {
   color-scheme: dark;
 
-  /* Dark theme (default) - R G B triplets, numerically identical to this app's original hex
-     values (see git history of tailwind.config.js) so the main converter page, which never sets
-     [data-theme], renders pixel-identical to before this variable-based system existed. */
+  /* Base defaults - R G B triplets, numerically identical to this app's original hex values (see
+     git history of tailwind.config.js). The main converter page (App.jsx) never sets [data-theme]
+     at all, so it always resolves to exactly these values, untouched by anything below. */
   --ledger-void: 7 10 18;
   --ledger-bg: 14 20 32;
   --ledger-panel: 20 27 42;
@@ -28,12 +28,44 @@
 }
 
 /*
-  FLEXCUBE dashboard light theme (2026-09-19, user-requested light/dark toggle). Scoped to
-  [data-theme="light"] rather than a media query or documentElement - FlexcubeDashboard.jsx sets
-  this attribute on its OWN root <div> only, toggled from its navbar and persisted per-viewer in
-  localStorage, so it can never leak onto the separate main converter page (App.jsx), which has no
-  theme toggle of its own and always renders with the :root dark defaults above.
+  FLEXCUBE dashboard theme (2026-09-19, user-requested light/dark toggle + a palette match to the
+  Profinch Solutions logo). FlexcubeDashboard.jsx sets data-theme="dark" or "light" explicitly on
+  its OWN root <div> (never on documentElement), so BOTH blocks below only ever apply inside that
+  one page - the main converter page sets neither attribute and always falls through to the plain
+  :root defaults above, completely unaffected by either block.
+
+  Accent palette (wire/alarm/amber/accent/violet/cyan) is built from five hex values the user
+  supplied directly: #a8c8e5 (accent), #ecbcbc (alarm), #baeeca (wire), #b5cbea (violet), #b6f0ef
+  (cyan) - used close to as-given for dark-theme foreground/glow color (they're light pastels, so
+  they read well against the dark navy background) and darkened (keeping the same hue) for
+  light-theme foreground text, where the original pastel values are instead reused nearly as-is
+  for the pale "Dim" chip backgrounds. The user's five colors had no warm/orange hue at all, and
+  "amber" needs one (it's this dashboard's only warning-level color, distinct from wire/alarm) -
+  a pastel gold (#f0d9a8) was added to match the same soft, muted character as the other five,
+  since no equivalent was supplied. Neutrals (void/bg/panel/line/ink) are kept as the existing dark
+  navy / white pair in both blocks - only the accent/highlight colors change with this palette.
 */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ledger-void: 7 10 18;
+  --ledger-bg: 14 20 32;
+  --ledger-panel: 20 27 42;
+  --ledger-panelAlt: 24 34 54;
+  --ledger-line: 38 49 81;
+  --ledger-ink: 231 236 245;
+  --ledger-inkDim: 138 147 168;
+  --ledger-wire: 186 238 202;
+  --ledger-wireDim: 20 46 36;
+  --ledger-amber: 240 217 168;
+  --ledger-amberDim: 58 46 22;
+  --ledger-alarm: 236 188 188;
+  --ledger-alarmDim: 58 30 30;
+  --ledger-accent: 168 200 229;
+  --ledger-accentDim: 24 38 56;
+  --ledger-violet: 181 203 234;
+  --ledger-cyan: 182 240 239;
+}
+
 [data-theme="light"] {
   color-scheme: light;
   --ledger-void: 236 241 249;
@@ -43,16 +75,16 @@
   --ledger-line: 213 221 235;
   --ledger-ink: 18 25 40;
   --ledger-inkDim: 91 101 122;
-  --ledger-wire: 15 128 92;
-  --ledger-wireDim: 214 241 231;
-  --ledger-amber: 173 108 8;
-  --ledger-amberDim: 250 233 205;
-  --ledger-alarm: 186 47 39;
-  --ledger-alarmDim: 250 224 220;
-  --ledger-accent: 53 88 191;
-  --ledger-accentDim: 224 231 250;
-  --ledger-violet: 120 55 226;
-  --ledger-cyan: 6 137 168;
+  --ledger-wire: 31 143 92;
+  --ledger-wireDim: 214 241 227;
+  --ledger-amber: 184 132 42;
+  --ledger-amberDim: 250 238 212;
+  --ledger-alarm: 193 77 71;
+  --ledger-alarmDim: 250 227 227;
+  --ledger-accent: 63 111 176;
+  --ledger-accentDim: 223 233 247;
+  --ledger-violet: 79 102 184;
+  --ledger-cyan: 26 143 138;
 }
 
 html,
@@ -260,37 +292,6 @@ body {
   animation: panel-glow 5s ease-in-out infinite;
 }
 
-/* HUD corner brackets - four small L-shaped accents pinned to a panel's own corners via one
-   shared ::before/::after pair per side, evoking targeting-reticle framing without needing four
-   extra DOM elements per panel. Panels opt in with class="hud-corners" (position: relative). */
-.hud-corners {
-  position: relative;
-}
-.hud-corners::before,
-.hud-corners::after {
-  content: "";
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  pointer-events: none;
-  border-color: rgb(var(--ledger-cyan) / 0.55);
-  transition: border-color 0.3s ease;
-}
-.hud-corners::before {
-  top: -1px;
-  left: -1px;
-  border-top: 2px solid;
-  border-left: 2px solid;
-  border-top-left-radius: 4px;
-}
-.hud-corners::after {
-  bottom: -1px;
-  right: -1px;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
-  border-bottom-right-radius: 4px;
-}
-
 /* Animated scanning underline for the navbar - a thin bright band sweeping left-to-right on loop. */
 @keyframes nav-scan {
   0% {
@@ -302,6 +303,65 @@ body {
 }
 .animate-nav-scan {
   animation: nav-scan 3.2s linear infinite;
+}
+
+/*
+  Real glassmorphism (2026-09-19, "panels are still too normal... replace with glass panels") -
+  deliberately only sets backdrop-filter/box-shadow here, never background-color or border-color:
+  those stay on the element's own Tailwind classes (bg-ledger-panel/NN, border-ledger-line, or the
+  brighter active-state colors on a running pipeline stage) so this class can layer under EITHER
+  without a specificity fight - a hand-written class in this file compiles AFTER @tailwind
+  utilities above, so it would otherwise always win a background/border collision regardless of
+  which Tailwind utility was meant to apply. The visible "glass" comes from pairing this class with
+  a LOWER-opacity background utility (e.g. bg-ledger-panel/55 instead of /90) so the blurred page
+  background (hud-grid-bg) actually shows through - a glass panel that's 90% opaque doesn't read as
+  glass.
+*/
+.glass-panel {
+  backdrop-filter: blur(20px) saturate(165%);
+  -webkit-backdrop-filter: blur(20px) saturate(165%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(var(--ledger-ink) / 0.08),
+    inset 0 0 0 1px rgba(var(--ledger-ink) / 0.03),
+    0 12px 36px -16px rgba(0, 0, 0, 0.5);
+}
+
+/* Same idea, lighter touch - for the small pipeline-stage blocks rather than full panels. */
+.glass-block {
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow: inset 0 1px 0 0 rgba(var(--ledger-ink) / 0.07);
+}
+
+/*
+  Ambient background glow orbs (2026-09-19, "I can't see any glass panels" - the glass panels'
+  backdrop-filter WAS applying correctly, but blurring a nearly-flat, barely-tinted background
+  produces almost no visible difference, so the frosted effect never actually became noticeable in
+  practice). These three large, heavily-blurred color blobs sit fixed behind all page content
+  (negative z-index, pointer-events-none) using the same theme palette (accent/wire/cyan) - now
+  there is something colorful and soft-edged for the glass panels to visibly distort, which is what
+  actually sells a "glass" look, and a slow drift animation keeps the page feeling alive.
+*/
+@keyframes orb-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.08); }
+}
+@keyframes orb-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-35px, 25px) scale(1.06); }
+}
+@keyframes orb-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(25px, -30px) scale(1.1); }
+}
+.animate-orb-a {
+  animation: orb-drift-a 18s ease-in-out infinite;
+}
+.animate-orb-b {
+  animation: orb-drift-b 22s ease-in-out infinite;
+}
+.animate-orb-c {
+  animation: orb-drift-c 20s ease-in-out infinite;
 }
 
 /* Theme-toggle icon swap - a quick rotate + fade rather than an abrupt swap. */

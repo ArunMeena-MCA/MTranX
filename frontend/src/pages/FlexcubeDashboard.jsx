@@ -202,6 +202,15 @@ export default function FlexcubeDashboard() {
 
   return (
     <div data-theme={theme} className="hud-grid-bg flex h-screen flex-col overflow-y-auto bg-ledger-void text-ledger-ink">
+      {/* Ambient glow orbs behind everything - see index.css's own note on why these exist: the
+          glass panels' blur needs something colorful behind them to visibly distort, or the
+          "glass" effect is technically present but invisible against a near-flat background. */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="animate-orb-a absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-ledger-accent/30 blur-[110px]" />
+        <div className="animate-orb-b absolute -right-20 top-1/3 h-[380px] w-[380px] rounded-full bg-ledger-wire/25 blur-[110px]" />
+        <div className="animate-orb-c absolute -bottom-32 left-1/3 h-[440px] w-[440px] rounded-full bg-ledger-cyan/25 blur-[120px]" />
+      </div>
+
       <TopBar
         state={state}
         engineOnline={engineOnline}
@@ -264,7 +273,7 @@ export default function FlexcubeDashboard() {
 
 function TopBar({ state, engineOnline, actionPending, theme, onToggleTheme, onPause, onResume, onStop, onRunNow }) {
   return (
-    <header className="relative overflow-hidden border-b border-ledger-line/70 bg-gradient-to-r from-ledger-panel via-ledger-panelAlt to-ledger-panel px-5 py-3.5 shadow-[0_1px_0_0_rgba(0,0,0,0.15)]">
+    <header className="relative border-b border-ledger-line/70 bg-gradient-to-r from-ledger-panel via-ledger-panelAlt to-ledger-panel px-5 py-3.5 shadow-[0_1px_0_0_rgba(0,0,0,0.15)]">
       {/* Animated scanning underline - a thin bright band sweeping the header's bottom edge on
           loop, replacing the old static diagonal gradient overlay (which didn't hold up well
           against a light background). Purely decorative, pointer-events-none. */}
@@ -399,7 +408,7 @@ function ControlButton({ tone, onClick, disabled, children }) {
 
 function PipelineFlow({ isRunning, activeStage, currentFile }) {
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <div className="mb-4 flex items-center justify-between">
         <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">
           Conversion pipeline
@@ -429,8 +438,8 @@ function StageNode({ stage, active }) {
   return (
     <div
       className={[
-        "flex min-w-0 flex-1 basis-[120px] flex-col items-center gap-1.5 rounded-lg border px-3 py-3.5 text-center transition-colors",
-        active ? "border-ledger-cyan/70 bg-ledger-cyan/10 animate-node-glow" : "border-ledger-line bg-ledger-panelAlt/60",
+        "glass-block flex min-w-0 flex-1 basis-[120px] flex-col items-center gap-1.5 rounded-lg border px-3 py-3.5 text-center transition-colors",
+        active ? "border-ledger-cyan/70 bg-ledger-cyan/20 animate-node-glow" : "border-ledger-line bg-ledger-panelAlt/35",
       ].join(" ")}
     >
       <StageIcon stageKey={stage.key} active={active} />
@@ -532,7 +541,7 @@ function Connector({ active }) {
 
 function TypeStatsPanel({ typeStats, totals }) {
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <div className="mb-3 flex items-center justify-between">
         <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">
           Message types received
@@ -587,7 +596,7 @@ function CountdownPanel({ state, remainingSeconds, pollIntervalMs }) {
   const label = state === "RUNNING" ? "Running" : state === "PAUSED" ? "Paused" : "Next cycle in";
   const display = state === "RUNNING" ? "..." : state === "PAUSED" ? "--" : remainingSeconds ?? "--";
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow flex flex-col items-center justify-center rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow flex flex-col items-center justify-center rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">{label}</span>
       <span
         key={typeof display === "number" ? display : label}
@@ -604,7 +613,7 @@ function CountdownPanel({ state, remainingSeconds, pollIntervalMs }) {
 
 function FailuresPanel({ failures, show, onToggle }) {
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <button onClick={onToggle} className="flex w-full items-center justify-between text-left">
         <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">
           Failed messages ({failures.length})
@@ -654,7 +663,7 @@ function ConversionsPanel({ data, show, onToggle, onPageChange, onRowClick }) {
   const totalPages = Math.max(1, Math.ceil(total / size));
 
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <button onClick={onToggle} className="flex w-full items-center justify-between text-left">
         <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">
           Successful conversions ({total})
@@ -802,7 +811,7 @@ function ConversionDetailModal({ detail, error, onClose }) {
 
 function EventLogPanel({ events, errorCount, configured, enabled }) {
   return (
-    <div className="hud-corners animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/90 p-5 backdrop-blur-sm">
+    <div className="glass-panel animate-rise-in animate-panel-glow rounded-xl border border-ledger-line/60 bg-ledger-panel/55 p-5">
       <div className="mb-3 flex items-center justify-between">
         <span className="font-hud text-[11px] font-semibold uppercase tracking-widest2 text-ledger-inkDim">
           Pipeline activity &amp; errors
