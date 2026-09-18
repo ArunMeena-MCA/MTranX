@@ -1,5 +1,56 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+/**
+ * GET /api/flexcube/status - the FLEXCUBE dashboard's single polling endpoint (see
+ * pages/FlexcubeDashboard.jsx). Returns the current job state, per-MT-type counters, recent
+ * failures, and a recent-events log - see FlexcubeDashboardController/FlexcubeStatsService on the
+ * backend for the exact shape. Throws on network failure so the page can show "engine
+ * unreachable" the same way the rest of this app does.
+ */
+export async function fetchFlexcubeStatus() {
+  const res = await fetch(`${API_BASE}/api/flexcube/status`);
+  if (!res.ok) {
+    throw new Error("Can't reach the conversion engine at " + API_BASE);
+  }
+  return res.json();
+}
+
+async function postFlexcubeAction(action) {
+  const res = await fetch(`${API_BASE}/api/flexcube/${action}`, { method: "POST" });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(body?.message || `Request failed (${action}).`);
+  }
+  return body;
+}
+
+export const pauseFlexcube = () => postFlexcubeAction("pause");
+export const resumeFlexcube = () => postFlexcubeAction("resume");
+export const stopFlexcube = () => postFlexcubeAction("stop");
+export const runNowFlexcube = () => postFlexcubeAction("run-now");
+
+/**
+ * GET /api/flexcube/conversions?page=&size= - paginated, newest-first list of successful
+ * conversions (lightweight rows only, no MT/MX content - see fetchFlexcubeConversionDetail for
+ * that). Returns { items, page, size, total }.
+ */
+export async function fetchFlexcubeConversions({ page = 0, size = 25 } = {}) {
+  const res = await fetch(`${API_BASE}/api/flexcube/conversions?page=${page}&size=${size}`);
+  if (!res.ok) {
+    throw new Error("Could not load the conversions list.");
+  }
+  return res.json();
+}
+
+/** GET /api/flexcube/conversions/{id} - the full MT (source) + MX (converted) text for one row, fetched only when clicked. */
+export async function fetchFlexcubeConversionDetail(id) {
+  const res = await fetch(`${API_BASE}/api/flexcube/conversions/${id}`);
+  if (!res.ok) {
+    throw new Error(res.status === 404 ? "This conversion is no longer available." : "Could not load this conversion.");
+  }
+  return res.json();
+}
+
 export async function fetchMappings() {
   const res = await fetch(`${API_BASE}/api/mappings`);
   if (!res.ok) {
