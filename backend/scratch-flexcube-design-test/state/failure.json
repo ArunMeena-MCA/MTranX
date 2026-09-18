@@ -1,0 +1,9 @@
+{
+  "design_test.txt" : {
+    "fileName" : "design_test.txt",
+    "mtType" : "999",
+    "reason" : "No mapping document is configured for MT999 (looked for MT999_TO_*.yaml under the mappings folder).",
+    "firstFailedAt" : 1789647907.629094600,
+    "lastAttemptAt" : 1789708532.555493300
+  }
+}

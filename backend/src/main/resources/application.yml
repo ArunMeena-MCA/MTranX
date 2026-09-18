@@ -54,12 +54,35 @@ oracle:
   username: ${ORACLE_DB_USERNAME:}
   password: ${ORACLE_DB_PASSWORD:}
 
-# OBPS/FLEXCUBE SFTP file-drop integration - see FlexcubeSftpProperties, FlexcubeSftpClient,
-# FlexcubeFileWatcherJob. Disabled by default; the scheduled job checks isEnabled()/isConfigured()
-# on every cycle and simply skips (logging a warning) rather than attempting a connection with
-# missing credentials.
+# OBPS/FLEXCUBE file-drop integration - see FlexcubeProperties, FlexcubeFileStore (and its two
+# implementations FlexcubeSftpClient/FlexcubeLocalFileStore), FlexcubeFileWatcherJob. Disabled by
+# default; the scheduled job checks isEnabled()/isConfigured() on every cycle and simply skips
+# (logging a warning) rather than attempting a connection/read with missing config.
+#
+# access-mode: "sftp" (default - backend runs on a separate machine from FLEXCUBE, reaches it over
+# SFTP) or "local" (backend runs directly on the FLEXCUBE app server - base-path is then a plain
+# local filesystem path, and every FLEXCUBE_SFTP_* variable below is unused).
 flexcube:
   enabled: ${FLEXCUBE_ENABLED:false}
+  access-mode: ${FLEXCUBE_ACCESS_MODE:sftp}
+  base-path: ${FLEXCUBE_BASE_PATH:}
+  # The four subfolder names under base-path - defaults match the names originally described, but
+  # a real deployment may use different literal names (e.g. plain "out" instead of "MT_out") -
+  # override to match whatever actually exists rather than assuming.
+  mt-out-folder: ${FLEXCUBE_MT_OUT_FOLDER:MT_out}
+  mt-history-folder: ${FLEXCUBE_MT_HISTORY_FOLDER:MT_history}
+  mx-out-folder: ${FLEXCUBE_MX_OUT_FOLDER:MX_out}
+  mt-failed-folder: ${FLEXCUBE_MT_FAILED_FOLDER:MT_failed}
+  poll-interval-ms: ${FLEXCUBE_POLL_INTERVAL_MS:300000}
+  min-file-age-ms: ${FLEXCUBE_MIN_FILE_AGE_MS:30000}
+  # Pause between two consecutive files that actually reach the converter (each involves an LLM
+  # call) - keeps a cycle with many files from bursting the LLM provider. Set to 0 to disable.
+  conversion-delay-ms: ${FLEXCUBE_CONVERSION_DELAY_MS:5000}
+  # Local folder on THIS backend's own filesystem (never the remote FLEXCUBE/OBPS server) holding
+  # failure.json/successful.json - see FlexcubeFileTrackingService. Survives a backend restart,
+  # unlike FlexcubeStatsService's in-memory dashboard counters.
+  state-dir: ${FLEXCUBE_STATE_DIR:./flexcube-state}
+  # sftp mode only - ignored entirely when access-mode=local.
   host: ${FLEXCUBE_SFTP_HOST:}
   port: ${FLEXCUBE_SFTP_PORT:22}
   username: ${FLEXCUBE_SFTP_USERNAME:}
@@ -67,10 +90,11 @@ flexcube:
   passphrase: ${FLEXCUBE_SFTP_PASSPHRASE:}
   password: ${FLEXCUBE_SFTP_PASSWORD:}
   known-hosts-path: ${FLEXCUBE_SFTP_KNOWN_HOSTS_PATH:}
-  remote-base-path: ${FLEXCUBE_REMOTE_BASE_PATH:}
-  poll-interval-ms: ${FLEXCUBE_POLL_INTERVAL_MS:300000}
-  min-file-age-ms: ${FLEXCUBE_MIN_FILE_AGE_MS:30000}
 
 logging:
   level:
     com.wiredesk.mtmx: INFO
+    # Set FLEXCUBE_SFTP_DEBUG_LOGGING=DEBUG in backend/.env for a stuck SFTP auth failure - shows
+    # the raw SSH protocol exchange (which key algorithms were offered/tried, SSH_MSG_USERAUTH_PK_OK
+    # vs FAILURE, etc.), far more detail than FlexcubeSftpClient's own log lines alone can surface.
+    net.schmizz.sshj: ${FLEXCUBE_SFTP_DEBUG_LOGGING:INFO}

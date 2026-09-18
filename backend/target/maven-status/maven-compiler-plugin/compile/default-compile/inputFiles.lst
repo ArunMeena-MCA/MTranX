@@ -5,6 +5,7 @@ C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wire
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\validate\ValidatorService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\MappingUploadService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\orchestrate\ConversionOrchestrator.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeFileTrackingService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\exception\MappingDocIncompleteException.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\MtmxConverterApplication.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\convert\BusinessApplicationHeaderRenderer.java
@@ -17,8 +18,8 @@ C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wire
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\MappingUploadController.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\convert\XsdOrderingIndex.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\AutomatedConversionController.java
-C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\config\FlexcubeSftpProperties.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\model\ValidationRule.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeLocalFileStore.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\model\BusinessApplicationHeaderConfig.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\parser\MtParserService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeFileWatcherJob.java
@@ -36,14 +37,18 @@ C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wire
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\transform\TransformationEngine.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\ConversionController.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\exception\OracleFetchException.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeFileStore.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\AutomatedConvertRequest.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\SampleArchiveService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\MappingUploadResult.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeFileEntry.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\model\EdgeCase.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\config\FlexcubeProperties.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\exception\FlexcubeIntegrationException.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\MappingSummaryDto.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\exception\MtmxException.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\convert\MxRenderer.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeFileSession.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\MappingRegistry.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\config\WebConfig.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\convert\ConvertedMessage.java
@@ -51,6 +56,8 @@ C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wire
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\parser\DecompositionService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\OracleMessageFetchService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\convert\MtRenderer.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\web\FlexcubeDashboardController.java
+C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\automation\FlexcubeStatsService.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\config\OracleProperties.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\address\ParsedAddress.java
 C:\Users\Arun.Meena\Downloads\mtmx-java\mtmx-java\backend\src\main\java\com\wiredesk\mtmx\mapping\model\StructuredAddressRule.java
